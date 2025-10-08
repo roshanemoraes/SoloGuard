@@ -1,0 +1,5 @@
+{
+  "welcome": "வரவேற்கிறோம்",
+  "change_language": "மொழியை மாற்றவும்",
+  "hello_user": "வணக்கம், {{name}}!"
+}
