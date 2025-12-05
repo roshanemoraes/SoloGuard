@@ -9,6 +9,10 @@ import {
   FlatList,
   Modal,
   TouchableWithoutFeedback,
+  Linking,
+  Platform,
+  Animated,
+  PanResponder,
 } from "react-native";
 import MapView, { Marker, MapPressEvent, PROVIDER_GOOGLE } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
@@ -30,6 +34,15 @@ export default function TripScreen() {
     longitude: number;
   } | null>(null);
   const [mapPlaceName, setMapPlaceName] = useState("");
+  const [showExploreModal, setShowExploreModal] = useState(false);
+  const [exploreResults, setExploreResults] = useState<typeof sriLankaPlaces>([]);
+  const [exploreTitle, setExploreTitle] = useState("");
+  const [exploreOrigin, setExploreOrigin] = useState<TripDestination | null>(
+    null
+  );
+  const [exploreAdded, setExploreAdded] = useState<string[]>([]);
+  const [exploreLoading, setExploreLoading] = useState(false);
+  const googlePlacesKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY || "";
 
   const sriLankaPlaces: {
     name: string;
@@ -231,7 +244,7 @@ export default function TripScreen() {
     }
   };
 
-  const handleSelectPlace = (place: typeof sriLankaPlaces[number]) => {
+  const addPlaceToTrip = (place: typeof sriLankaPlaces[number]) => {
     const destination: TripDestination = {
       id: `${Date.now()}-${Math.random()}`,
       name: place.name,
@@ -250,6 +263,10 @@ export default function TripScreen() {
       setCurrentPage(Math.max(1, Math.ceil(updated.length / pageSize)));
       return updated;
     });
+  };
+
+  const handleSelectPlace = (place: typeof sriLankaPlaces[number]) => {
+    addPlaceToTrip(place);
     setSearchQuery("");
     setShowSuggestions(false);
   };
@@ -281,6 +298,73 @@ export default function TripScreen() {
     setMapSelected(null);
     setMapPlaceName("");
     setShowMapPicker(false);
+  };
+
+  const handleOpenInMaps = (item: TripDestination) => {
+    const url =
+      Platform.select({
+        ios: `maps:0,0?q=${encodeURIComponent(item.name)}@${item.location.latitude},${item.location.longitude}`,
+        android: `geo:0,0?q=${item.location.latitude},${item.location.longitude}(${encodeURIComponent(item.name)})`,
+      }) || `https://www.google.com/maps/search/?api=1&query=${item.location.latitude},${item.location.longitude}`;
+    Linking.openURL(url).catch(() =>
+      Alert.alert("Unable to open maps", "Please install a maps app to continue.")
+    );
+  };
+
+  const handleExploreNearby = async (item: TripDestination) => {
+    setExploreLoading(true);
+    setExploreResults([]);
+    setExploreAdded([]);
+    setExploreOrigin(item);
+    setExploreTitle(`Nearby ${item.type.replace("_", " ")}`);
+    setShowExploreModal(true);
+
+    const fallback = sriLankaPlaces
+      .filter((p) => p.type === item.type && p.name !== item.name)
+      .slice(0, 5);
+
+    if (!googlePlacesKey) {
+      setExploreResults(fallback);
+      setExploreLoading(false);
+      return;
+    }
+
+    try {
+      const typeMap: Record<string, string> = {
+        food: "restaurant",
+        outdoors: "park",
+        culture: "museum",
+        water: "tourist_attraction",
+        hospital: "hospital",
+        police: "police",
+        safe_area: "tourist_attraction",
+        custom: "tourist_attraction",
+      };
+
+      const typeParam = typeMap[item.type] || "tourist_attraction";
+      const radiusMeters = 3000;
+      const resp = await fetch(
+        `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${item.location.latitude},${item.location.longitude}&radius=${radiusMeters}&type=${typeParam}&key=${googlePlacesKey}`
+      );
+      const data = await resp.json();
+
+      if (data.status === "OK" && Array.isArray(data.results)) {
+        const mapped = data.results.slice(0, 8).map((p: any) => ({
+          name: p.name,
+          latitude: p.geometry?.location?.lat,
+          longitude: p.geometry?.location?.lng,
+          address: p.vicinity || p.formatted_address,
+          type: item.type,
+        }));
+        setExploreResults(mapped);
+      } else {
+        setExploreResults(fallback);
+      }
+    } catch (e) {
+      setExploreResults(fallback);
+    } finally {
+      setExploreLoading(false);
+    }
   };
 
   const handleDeleteDestination = (id: string) => {
@@ -326,58 +410,150 @@ export default function TripScreen() {
     }
   }, [totalPages, currentPage]);
 
-  const renderDestinationItem = ({ item }: { item: TripDestination }) => (
-    <View className="bg-white dark:bg-gray-800 rounded-lg p-4 mb-3 shadow-sm">
-      <View className="flex-row items-start space-x-3">
-        <View
-          className="w-10 h-10 rounded-full items-center justify-center"
-          style={{ backgroundColor: getDestinationColor(item.type) + "20" }}
-        >
-          <Ionicons
-            name={getDestinationIcon(item.type) as any}
-            size={20}
-            color={getDestinationColor(item.type)}
-          />
-        </View>
+  const SwipeableCard = ({
+    children,
+    onDelete,
+    enabled,
+  }: {
+    children: React.ReactNode;
+    onDelete?: () => void;
+    enabled: boolean;
+  }) => {
+    const translateX = React.useRef(new Animated.Value(0)).current;
+    const [open, setOpen] = useState(false);
+    const ACTION_WIDTH = 96;
 
-        <View className="flex-1">
-          <View className="flex-row items-center justify-between mb-1">
-            <Text className="text-lg font-medium text-gray-900 dark:text-white">
-              {item.name}
-            </Text>
+    const panResponder = React.useRef(
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
+        onPanResponderMove: (_, { dx }) => {
+          if (!enabled) return;
+          if (dx < 0) {
+            translateX.setValue(Math.max(dx, -ACTION_WIDTH));
+          }
+        },
+        onPanResponderRelease: (_, { dx }) => {
+          if (!enabled) return;
+          if (dx < -40) {
+            Animated.timing(translateX, {
+              toValue: -ACTION_WIDTH,
+              duration: 150,
+              useNativeDriver: true,
+            }).start(() => setOpen(true));
+          } else {
+            Animated.timing(translateX, {
+              toValue: 0,
+              duration: 150,
+              useNativeDriver: true,
+            }).start(() => setOpen(false));
+          }
+        },
+        onPanResponderTerminate: () => {
+          Animated.timing(translateX, {
+            toValue: 0,
+            duration: 150,
+            useNativeDriver: true,
+          }).start(() => setOpen(false));
+        },
+      })
+    ).current;
+
+    return (
+      <View className="mb-3">
+        <View className="absolute right-0 top-0 bottom-0 w-24 items-center justify-center">
+          {enabled && (
+            <Pressable
+              onPress={() => {
+                onDelete?.();
+                setOpen(false);
+                translateX.setValue(0);
+              }}
+              className="bg-red-600 active:bg-red-700 w-full h-full items-center justify-center rounded-r-lg"
+            >
+              <Ionicons name="trash" size={20} color="#fff" />
+            </Pressable>
+          )}
+        </View>
+        <Animated.View
+          style={{
+            transform: [{ translateX }],
+          }}
+          {...panResponder.panHandlers}
+        >
+          {children}
+        </Animated.View>
+      </View>
+    );
+  };
+
+  const renderDestinationItem = ({ item }: { item: TripDestination }) => (
+    <SwipeableCard
+      enabled={!item.isPreloaded}
+      onDelete={() => handleDeleteDestination(item.id)}
+    >
+      <View className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+        <View className="flex-row items-start space-x-3">
+          <View
+            className="w-12 h-12 rounded-full items-center justify-center"
+            style={{ backgroundColor: getDestinationColor(item.type) + "20" }}
+          >
+            <Ionicons
+              name={getDestinationIcon(item.type) as any}
+              size={22}
+              color={getDestinationColor(item.type)}
+            />
           </View>
 
-          {item.location.address && (
-            <Text className="text-gray-600 dark:text-gray-300 mb-1">
-              {item.location.address}
-            </Text>
-          )}
-
-          <View className="flex-row items-center justify-between mt-2">
-            <View
-              className="px-2 py-1 rounded"
-              style={{ backgroundColor: getDestinationColor(item.type) + "20" }}
-            >
-              <Text
-                className="text-xs font-medium capitalize"
-                style={{ color: getDestinationColor(item.type) }}
-              >
-                {item.type.replace("_", " ")}
+          <View className="flex-1">
+            <View className="flex-row items-center justify-between mb-1">
+              <Text className="text-base font-medium text-gray-900 dark:text-white flex-1 pr-2">
+                {item.name}
               </Text>
+              <View
+                className="px-2 py-1 rounded"
+                style={{ backgroundColor: getDestinationColor(item.type) + "20" }}
+              >
+                <Text
+                  className="text-xs font-medium capitalize"
+                  style={{ color: getDestinationColor(item.type) }}
+                >
+                  {item.type.replace("_", " ")}
+                </Text>
+              </View>
             </View>
 
-            {!item.isPreloaded && (
-              <Pressable
-                onPress={() => handleDeleteDestination(item.id)}
-                className="bg-red-600 active:bg-red-700 px-3 py-1 rounded"
-              >
-                <Text className="text-white text-xs font-medium">Delete</Text>
-              </Pressable>
+            {item.location.address && (
+              <Text className="text-gray-600 dark:text-gray-300 mb-2">
+                {item.location.address}
+              </Text>
             )}
+
+            <View className="flex-row items-center justify-end space-x-5">
+              <Pressable
+                onPress={() => handleOpenInMaps(item)}
+                className="flex-row items-center space-x-1"
+              >
+                <Ionicons name="map" size={16} color="#2563eb" />
+                <Text className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                  View
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => handleExploreNearby(item)}
+                className="flex-row items-center space-x-1"
+              >
+                <Ionicons name="compass" size={16} color="#10b981" />
+                <Text className="text-xs font-semibold text-green-600 dark:text-green-400">
+                  Explore
+                </Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </View>
-    </View>
+    </SwipeableCard>
   );
 
   return (
@@ -410,7 +586,7 @@ export default function TripScreen() {
                   )}
                 </View>
                 <View className="flex-row items-center bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-3">
-                  <Ionicons name="search" size={18} color="#6b7280" className="mr-2" />
+                  <Ionicons name="search" size={18} color="#6b7280" style={{ marginRight: 8 }} />
                   <TextInput
                     value={searchQuery}
                     onChangeText={(text) => {
@@ -750,6 +926,107 @@ export default function TripScreen() {
         </View>
       </Modal>
 
+      {/* Explore Nearby modal (mocked) */}
+      <Modal
+        visible={showExploreModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => {
+          setShowExploreModal(false);
+          setExploreAdded([]);
+        }}
+      >
+        <View className="flex-1 bg-black/40 justify-end">
+          <View className="bg-white dark:bg-gray-900 rounded-t-2xl p-4 max-h-[60%]">
+            <View className="flex-row items-center justify-between mb-3">
+              <Text className="text-lg font-bold text-gray-900 dark:text-white">
+                {exploreTitle || "Nearby"}
+              </Text>
+              <Pressable
+                onPress={() => {
+                  setShowExploreModal(false);
+                  setExploreAdded([]);
+                }}
+              >
+                <Ionicons name="close" size={22} color="#6b7280" />
+              </Pressable>
+            </View>
+
+            {exploreResults.length === 0 ? (
+              <Text className="text-sm text-gray-600 dark:text-gray-300">
+                {exploreLoading
+                  ? "Loading nearby places..."
+                  : "No nearby places found. Connect Google Places Nearby API to load real results."}
+              </Text>
+            ) : (
+              <FlatList
+                data={exploreResults}
+                keyExtractor={(item) => item.name}
+                renderItem={({ item }) => {
+                  const distance =
+                    exploreOrigin &&
+                    calculateDistanceKm(
+                      exploreOrigin.location.latitude,
+                      exploreOrigin.location.longitude,
+                      item.latitude,
+                      item.longitude
+                    );
+                  const isAdded = exploreAdded.includes(item.name);
+                  return (
+                    <View className="border-b border-gray-100 dark:border-gray-800 py-2">
+                      <View className="flex-row items-start justify-between">
+                        <View className="flex-1 pr-3">
+                          <Text className="text-base font-medium text-gray-900 dark:text-white">
+                            {item.name}
+                          </Text>
+                          {item.address && (
+                            <Text className="text-sm text-gray-600 dark:text-gray-300">
+                              {item.address}
+                            </Text>
+                          )}
+                        </View>
+                        <View className="items-end space-y-1">
+                          {distance && (
+                            <Text className="text-xs text-gray-500 dark:text-gray-400">
+                              {distance.toFixed(1)} km
+                            </Text>
+                          )}
+                          <Pressable
+                            onPress={() => {
+                              if (isAdded) return;
+                              addPlaceToTrip(item);
+                              setExploreAdded((prev) =>
+                                prev.includes(item.name) ? prev : [...prev, item.name]
+                              );
+                            }}
+                            disabled={isAdded}
+                            className={`px-3 py-1 rounded ${
+                              isAdded
+                                ? "bg-gray-200 dark:bg-gray-700"
+                                : "bg-green-600 active:bg-green-700"
+                            }`}
+                          >
+                            <Text
+                              className={`text-xs font-semibold ${
+                                isAdded
+                                  ? "text-gray-500 dark:text-gray-200"
+                                  : "text-white"
+                              }`}
+                            >
+                              {isAdded ? "Added" : "Add"}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                }}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+
       {/* Google Maps picker modal */}
       <Modal
         visible={showMapPicker}
@@ -771,6 +1048,7 @@ export default function TripScreen() {
             <MapView
               provider={PROVIDER_GOOGLE}
               style={{ flex: 1 }}
+              googleMapsApiKey={googlePlacesKey || undefined}
               initialRegion={{
                 latitude: 7.8731,
                 longitude: 80.7718,
@@ -812,3 +1090,22 @@ export default function TripScreen() {
     </View>
   );
 }
+  const calculateDistanceKm = (
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
+  ) => {
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const R = 6371; // km
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat1)) *
+        Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
