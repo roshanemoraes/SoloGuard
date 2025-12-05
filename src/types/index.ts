@@ -57,7 +57,15 @@ export interface TripDestination {
   id: string;
   name: string;
   location: LocationData;
-  type: 'hospital' | 'police' | 'safe_area' | 'custom';
+  type:
+    | 'hospital'
+    | 'police'
+    | 'safe_area'
+    | 'custom'
+    | 'outdoors'
+    | 'food'
+    | 'culture'
+    | 'water';
   isPreloaded: boolean;
 }
 
