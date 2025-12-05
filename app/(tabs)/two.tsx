@@ -7,7 +7,6 @@ import {
   Pressable,
   Modal,
   FlatList,
-  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppStore } from "../../src/stores/useAppStore";
@@ -81,6 +80,8 @@ export default function TabTwoScreen() {
     email: "",
     medicalInfo: "",
   });
+  const [toast, setToast] = useState<{ type: "error" | "success"; message: string } | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ fullName?: string; username?: string; phone?: string; email?: string }>({});
 
   useEffect(() => {
     setProfileForm({
@@ -120,13 +121,41 @@ export default function TabTwoScreen() {
     return rest.length >= 7 && rest.length <= 15;
   };
 
+  const validateEmail = (email: string) => {
+    if (!email.trim()) return true;
+    const re = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+    return re.test(email.trim());
+  };
+
+  const validateUsername = (handle: string) => {
+    if (!handle.trim()) return true;
+    return /^[a-zA-Z0-9._-]{2,20}$/.test(handle.trim().replace(/^@/, ""));
+  };
+
   const handleSaveProfile = () => {
-    const composedPhone = `${profileCountryCode}${profilePhone.replace(
-      /[^0-9]/g,
-      ""
-    )}`;
+    const composedPhone = `${profileCountryCode}${profilePhone.replace(/[^0-9]/g, "")}`;
+    const errors: typeof fieldErrors = {};
+
+    if (!profileForm.fullName.trim() || profileForm.fullName.trim().length < 2) {
+      errors.fullName = "Enter at least 2 characters.";
+    }
+
+    if (!validateUsername(profileForm.username)) {
+      errors.username = "Use letters/numbers ._- (2-20 chars).";
+    }
+
     if (profilePhone.trim() && !validatePhone(composedPhone)) {
-      Alert.alert("Error", "Please enter a valid phone number for your profile.");
+      errors.phone = "Phone must be 7-15 digits.";
+    }
+
+    if (!validateEmail(profileForm.email)) {
+      errors.email = "Enter a valid email.";
+    }
+
+    setFieldErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      setToast({ type: "error", message: "Please fix the highlighted fields." });
       return;
     }
 
@@ -138,16 +167,37 @@ export default function TabTwoScreen() {
       phoneNumber: profilePhone.trim() ? composedPhone : "",
     });
 
-    Alert.alert(
-      "Saved",
-      "Your profile has been updated. We will include these details in SOS messages."
-    );
+    setToast({ type: "success", message: "Profile saved and used in SOS messages." });
   };
 
   return (
     <View className="flex-1 bg-gray-50 dark:bg-gray-900">
       <ScrollView className="flex-1">
         <View className="p-4 space-y-4">
+          {toast && (
+            <View
+              className="rounded-lg p-3 border shadow-sm flex-row items-center space-x-2"
+              style={{
+                backgroundColor: toast.type === "error" ? "#fef2f2" : "#ecfdf3",
+                borderColor: toast.type === "error" ? "#fecaca" : "#bbf7d0",
+              }}
+            >
+              <Ionicons
+                name={toast.type === "error" ? "alert-circle" : "checkmark-circle"}
+                size={18}
+                color={toast.type === "error" ? "#dc2626" : "#16a34a"}
+              />
+              <Text
+                className="text-sm flex-1"
+                style={{ color: toast.type === "error" ? "#991b1b" : "#166534" }}
+              >
+                {toast.message}
+              </Text>
+              <Pressable onPress={() => setToast(null)} className="p-1">
+                <Ionicons name="close" size={16} color="#6b7280" />
+              </Pressable>
+            </View>
+          )}
           <View className="flex-row items-center justify-between">
             <Text className="text-2xl font-bold text-gray-900 dark:text-white">
               Your Profile
@@ -168,12 +218,19 @@ export default function TabTwoScreen() {
               </Text>
               <TextInput
                 value={profileForm.fullName}
-                onChangeText={(text) =>
-                  setProfileForm({ ...profileForm, fullName: text })
-                }
+                onChangeText={(text) => {
+                  setProfileForm({ ...profileForm, fullName: text });
+                  setFieldErrors((prev) => ({
+                    ...prev,
+                    fullName: text.trim().length >= 2 ? undefined : "Enter at least 2 characters.",
+                  }));
+                }}
                 placeholder="Enter your full name"
                 className="bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-3 rounded-lg"
               />
+              {fieldErrors.fullName && (
+                <Text className="text-xs text-red-600 mt-1">{fieldErrors.fullName}</Text>
+              )}
             </View>
 
             <View>
@@ -182,20 +239,28 @@ export default function TabTwoScreen() {
               </Text>
               <TextInput
                 value={profileForm.username}
-                onChangeText={(text) =>
-                  setProfileForm({ ...profileForm, username: text })
-                }
+                onChangeText={(text) => {
+                  setProfileForm({ ...profileForm, username: text });
+                  const valid = validateUsername(text);
+                  setFieldErrors((prev) => ({
+                    ...prev,
+                    username: valid ? undefined : "Use letters/numbers ._- (2-20 chars).",
+                  }));
+                }}
                 placeholder="@handle"
                 autoCapitalize="none"
                 className="bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-3 rounded-lg"
               />
+              {fieldErrors.username && (
+                <Text className="text-xs text-red-600 mt-1">{fieldErrors.username}</Text>
+              )}
             </View>
 
-            <View>
-              <Text className="text-base font-medium text-gray-900 dark:text-white mb-2">
-                Phone Number
-              </Text>
-              <View className="flex-row">
+              <View>
+                <Text className="text-base font-medium text-gray-900 dark:text-white mb-2">
+                  Phone Number
+                </Text>
+                <View className="flex-row">
                 <Pressable
                   onPress={() => setShowProfileCountryModal(true)}
                   className="w-44 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg mr-2 px-4 py-3 flex-row items-center justify-between"
@@ -207,17 +272,32 @@ export default function TabTwoScreen() {
                 </Pressable>
                 <TextInput
                   value={profilePhone}
-                  onChangeText={setProfilePhone}
+                  onChangeText={(val) => {
+                    const digits = val.replace(/[^0-9]/g, "");
+                    setProfilePhone(digits);
+                    const composed = `${profileCountryCode}${digits}`;
+                    setFieldErrors((prev) => ({
+                      ...prev,
+                      phone: val.trim()
+                        ? validatePhone(composed)
+                          ? undefined
+                          : "Phone must be 7-15 digits."
+                        : undefined,
+                    }));
+                  }}
                   placeholder="Your phone"
                   keyboardType="phone-pad"
                   className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-3 text-gray-900 dark:text-white"
                 />
+                </View>
+                <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Stored as: {profileCountryCode}
+                  {profilePhone.replace(/[^0-9]/g, "")}
+                </Text>
+                {fieldErrors.phone && (
+                  <Text className="text-xs text-red-600 mt-1">{fieldErrors.phone}</Text>
+                )}
               </View>
-              <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Stored as: {profileCountryCode}
-                {profilePhone.replace(/[^0-9]/g, "")}
-              </Text>
-            </View>
 
             <View>
               <Text className="text-base font-medium text-gray-900 dark:text-white mb-2">
@@ -225,14 +305,21 @@ export default function TabTwoScreen() {
               </Text>
               <TextInput
                 value={profileForm.email}
-                onChangeText={(text) =>
-                  setProfileForm({ ...profileForm, email: text })
-                }
+                onChangeText={(text) => {
+                  setProfileForm({ ...profileForm, email: text });
+                  setFieldErrors((prev) => ({
+                    ...prev,
+                    email: validateEmail(text) ? undefined : "Enter a valid email.",
+                  }));
+                }}
                 placeholder="you@example.com"
                 autoCapitalize="none"
                 keyboardType="email-address"
                 className="bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-3 rounded-lg"
               />
+              {fieldErrors.email && (
+                <Text className="text-xs text-red-600 mt-1">{fieldErrors.email}</Text>
+              )}
             </View>
 
             <View>

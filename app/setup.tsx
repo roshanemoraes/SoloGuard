@@ -5,10 +5,10 @@ import {
   ScrollView,
   TextInput,
   Pressable,
-  Alert,
   Switch,
   Modal,
   FlatList,
+  TouchableWithoutFeedback,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -93,6 +93,14 @@ export default function SetupScreen() {
     phoneNumber: "", // composed on save
     isPrimary: false,
   });
+  const [contactErrors, setContactErrors] = useState<{ name?: string; phone?: string }>({});
+  const [toast, setToast] = useState<{ type: "error" | "success"; message: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ visible: boolean; contactId: string | null; name: string }>({
+    visible: false,
+    contactId: null,
+    name: "",
+  });
+  const [togglingContactId, setTogglingContactId] = useState<string | null>(null);
 
   /** ---- SETTINGS FORM: Inactivity (HH/MM) + Interval (MM/SS) + Battery ---- */
   // Inactivity (store in minutes)
@@ -104,6 +112,7 @@ export default function SetupScreen() {
   const [intS, setIntS] = useState<string>("");
 
   const [batteryVal, setBatteryVal] = useState<string>("");
+  const [settingErrors, setSettingErrors] = useState<{ battery?: string; inactivity?: string; interval?: string }>({});
 
   /** ---- Hydrate local UI from store ---- */
   useEffect(() => {
@@ -127,35 +136,87 @@ export default function SetupScreen() {
 
   /** ---- Helpers & committers ---- */
   const toInt = (s: string) => {
-    if (!s.trim()) return 0;
-    const n = Number(s);
+    const clean = s.replace(/[^0-9]/g, "");
+    if (!clean.trim()) return 0;
+    const n = Number(clean);
     return Number.isFinite(n) ? Math.floor(Math.max(0, n)) : 0;
   };
   const clamp059 = (n: number) => Math.max(0, Math.min(59, n));
 
+  const validateInactivityInline = (hText: string, mText: string) => {
+    const h = toInt(hText);
+    const m = clamp059(toInt(mText));
+    const totalMinutes = h * 60 + m;
+    if (totalMinutes < 1) {
+      setSettingErrors((prev) => ({ ...prev, inactivity: "Must be at least 1 minute." }));
+    } else {
+      setSettingErrors((prev) => ({ ...prev, inactivity: undefined }));
+    }
+  };
+
   const commitInactivityHM = () => {
     const h = toInt(inactH);
     const m = clamp059(toInt(inactM));
-    const totalMinutes = Math.max(1, h * 60 + m);
+    const totalMinutes = h * 60 + m;
+    if (totalMinutes < 1) {
+      setSettingErrors((prev) => ({ ...prev, inactivity: "Must be at least 1 minute." }));
+      return;
+    }
+    setSettingErrors((prev) => ({ ...prev, inactivity: undefined }));
     updateSettings({ inactivityThreshold: totalMinutes });
     setInactM(String(m)); // reflect clamp
+  };
+
+  const validateIntervalInline = (mText: string, sText: string) => {
+    const m = toInt(mText);
+    const s = clamp059(toInt(sText));
+    const totalSeconds = m * 60 + s;
+    if (totalSeconds < 5) {
+      setSettingErrors((prev) => ({ ...prev, interval: "Must be at least 5 seconds." }));
+    } else {
+      setSettingErrors((prev) => ({ ...prev, interval: undefined }));
+    }
   };
 
   const commitIntervalMS = () => {
     const m = toInt(intM);
     const s = clamp059(toInt(intS));
-    const totalSeconds = Math.max(1, m * 60 + s);
+    const totalSeconds = m * 60 + s;
+    if (totalSeconds < 5) {
+      setSettingErrors((prev) => ({ ...prev, interval: "Must be at least 5 seconds." }));
+      return;
+    }
+    setSettingErrors((prev) => ({ ...prev, interval: undefined }));
     updateSettings({ updateInterval: totalSeconds });
     setIntS(String(s)); // reflect clamp
+  };
+
+  const validateBatteryInline = (val: string) => {
+    const n = Number(val);
+    if (!val.trim()) {
+      setSettingErrors((prev) => ({ ...prev, battery: "Enter a number 1-100." }));
+      return;
+    }
+    if (!Number.isFinite(n)) {
+      setSettingErrors((prev) => ({ ...prev, battery: "Enter a number 1-100." }));
+      return;
+    }
+    const clamped = Math.max(1, Math.min(100, Math.floor(n)));
+    if (clamped !== n) {
+      setSettingErrors((prev) => ({ ...prev, battery: "Use 1-100 only." }));
+    } else {
+      setSettingErrors((prev) => ({ ...prev, battery: undefined }));
+    }
   };
 
   const commitBattery = () => {
     const n = Number(batteryVal);
     if (!Number.isFinite(n)) {
-      Alert.alert("Invalid value", "Battery percentage must be 1–100.");
+      setSettingErrors((prev) => ({ ...prev, battery: "Enter a number 1-100." }));
       return;
     }
     const clamped = Math.max(1, Math.min(100, Math.floor(n)));
+    setSettingErrors((prev) => ({ ...prev, battery: undefined }));
     if (String(clamped) !== batteryVal) setBatteryVal(String(clamped));
     updateSettings({ batteryThreshold: clamped });
   };
@@ -166,34 +227,54 @@ export default function SetupScreen() {
     return rest.length >= 7 && rest.length <= 15;
   };
 
+  const validateContactFields = (name: string, phone: string) => {
+    const errors: { name?: string; phone?: string } = {};
+    if (!name.trim() || name.trim().length < 2) {
+      errors.name = "Enter at least 2 characters.";
+    }
+    if (!phone.trim()) {
+      errors.phone = "Enter a phone number.";
+    } else {
+      const fullPhone = `${countryCode}${phone.replace(/[^0-9]/g, "")}`;
+      if (!validatePhone(fullPhone)) {
+        errors.phone = "Phone must be 7-15 digits.";
+      }
+    }
+    return errors;
+  };
+
   const handleAddContact = () => {
-    if (!newContact.name.trim()) {
-      Alert.alert("Error", "Please enter a contact name.");
-      return;
-    }
-    const fullPhone = `${countryCode}${localPhone.replace(/[^0-9]/g, "")}`;
-    if (!validatePhone(fullPhone)) {
-      Alert.alert("Error", "Please enter a valid phone number.");
-      return;
-    }
+    try {
+      const errors = validateContactFields(newContact.name, localPhone);
+      setContactErrors(errors);
+      if (Object.keys(errors).length > 0) {
+        setToast({ type: "error", message: "Please fix the highlighted fields." });
+        return;
+      }
 
-    const contact: EmergencyContact = {
-      id: Date.now().toString(),
-      name: newContact.name.trim(),
-      phoneNumber: fullPhone,
-      isPrimary: newContact.isPrimary,
-      isActive: true,
-    };
+      const fullPhone = `${countryCode}${localPhone.replace(/[^0-9]/g, "")}`;
 
-    if (contact.isPrimary) {
-      emergencyContacts.forEach((c) => c.isPrimary && updateEmergencyContact(c.id, { isPrimary: false }));
+      const contact: EmergencyContact = {
+        id: Date.now().toString(),
+        name: newContact.name.trim(),
+        phoneNumber: fullPhone,
+        isPrimary: newContact.isPrimary,
+        isActive: true,
+      };
+
+      if (contact.isPrimary) {
+        emergencyContacts.forEach((c) => c.isPrimary && updateEmergencyContact(c.id, { isPrimary: false }));
+      }
+
+      addEmergencyContact(contact);
+      setNewContact({ name: "", phoneNumber: "", isPrimary: false });
+      setCountryCode("+94");
+      setLocalPhone("");
+      setToast({ type: "success", message: "Contact added successfully." });
+      setShowAddContact(false);
+    } catch (e) {
+      setToast({ type: "error", message: "Something went wrong. Please try again." });
     }
-
-    addEmergencyContact(contact);
-    setNewContact({ name: "", phoneNumber: "", isPrimary: false });
-    setCountryCode("+94");
-    setLocalPhone("");
-    setShowAddContact(false);
   };
 
   const handleEditContact = (contact: EmergencyContact) => {
@@ -203,6 +284,7 @@ export default function SetupScreen() {
       phoneNumber: contact.phoneNumber,
       isPrimary: contact.isPrimary,
     });
+    setContactErrors({});
     const match = COUNTRY_CODES.find((c) => contact.phoneNumber.startsWith(c.value));
     if (match) {
       setCountryCode(match.value);
@@ -216,45 +298,50 @@ export default function SetupScreen() {
   };
 
   const handleUpdateContact = () => {
-    if (!editingContact) return;
-    if (!newContact.name.trim()) {
-      Alert.alert("Error", "Please enter a contact name.");
-      return;
-    }
-    const fullPhone = `${countryCode}${localPhone.replace(/[^0-9]/g, "")}`;
-    if (!validatePhone(fullPhone)) {
-      Alert.alert("Error", "Please enter a valid phone number.");
-      return;
-    }
+    try {
+      if (!editingContact) return;
+      const errors = validateContactFields(newContact.name, localPhone);
+      setContactErrors(errors);
+      if (Object.keys(errors).length > 0) {
+        setToast({ type: "error", message: "Please fix the highlighted fields." });
+        return;
+      }
 
-    if (newContact.isPrimary) {
-      emergencyContacts.forEach((c) => {
-        if (c.isPrimary && c.id !== editingContact.id) updateEmergencyContact(c.id, { isPrimary: false });
+      const fullPhone = `${countryCode}${localPhone.replace(/[^0-9]/g, "")}`;
+
+      if (newContact.isPrimary) {
+        emergencyContacts.forEach((c) => {
+          if (c.isPrimary && c.id !== editingContact.id) updateEmergencyContact(c.id, { isPrimary: false });
+        });
+      }
+
+      updateEmergencyContact(editingContact.id, {
+        name: newContact.name.trim(),
+        phoneNumber: fullPhone,
+        isPrimary: newContact.isPrimary,
       });
+
+      setEditingContact(null);
+      setNewContact({ name: "", phoneNumber: "", isPrimary: false });
+      setCountryCode("+94");
+      setLocalPhone("");
+      setContactErrors({});
+      setShowAddContact(false);
+    } catch (e) {
+      setToast({ type: "error", message: "Something went wrong. Please try again." });
     }
-
-    updateEmergencyContact(editingContact.id, {
-      name: newContact.name.trim(),
-      phoneNumber: fullPhone,
-      isPrimary: newContact.isPrimary,
-    });
-
-    setEditingContact(null);
-    setNewContact({ name: "", phoneNumber: "", isPrimary: false });
-    setCountryCode("+94");
-    setLocalPhone("");
-    setShowAddContact(false);
   };
 
   const handleDeleteContact = (contactId: string) => {
-    Alert.alert("Delete Contact", "Are you sure you want to delete this emergency contact?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: () => removeEmergencyContact(contactId) },
-    ]);
+    const contact = emergencyContacts.find((c) => c.id === contactId);
+    setConfirmDelete({ visible: true, contactId, name: contact?.name || "this contact" });
   };
 
   const toggleContactActive = (contactId: string, isActive: boolean) => {
+    if (togglingContactId === contactId) return; // debounce rapid taps
+    setTogglingContactId(contactId);
     updateEmergencyContact(contactId, { isActive });
+    setTimeout(() => setTogglingContactId((prev) => (prev === contactId ? null : prev)), 150);
   };
 
   const handleSettingsChange = (key: keyof AppSettings, value: any) => {
@@ -281,6 +368,7 @@ export default function SetupScreen() {
           <Switch
             value={item.isActive}
             onValueChange={(value) => toggleContactActive(item.id, value)}
+            disabled={togglingContactId === item.id}
             trackColor={{ false: "#d1d5db", true: "#10b981" }}
             thumbColor="#ffffff"
           />
@@ -306,6 +394,30 @@ export default function SetupScreen() {
     <View className="flex-1 bg-gray-50 dark:bg-gray-900">
       <ScrollView className="flex-1">
         <View className="p-4">
+          {toast && (
+            <View
+              className="mb-4 rounded-lg p-3 border shadow-sm flex-row items-center space-x-2"
+              style={{
+                backgroundColor: toast.type === "error" ? "#fef2f2" : "#ecfdf3",
+                borderColor: toast.type === "error" ? "#fecaca" : "#bbf7d0",
+              }}
+            >
+              <Ionicons
+                name={toast.type === "error" ? "alert-circle" : "checkmark-circle"}
+                size={18}
+                color={toast.type === "error" ? "#dc2626" : "#16a34a"}
+              />
+              <Text
+                className="text-sm flex-1"
+                style={{ color: toast.type === "error" ? "#991b1b" : "#166534" }}
+              >
+                {toast.message}
+              </Text>
+              <Pressable onPress={() => setToast(null)} className="p-1">
+                <Ionicons name="close" size={16} color="#6b7280" />
+              </Pressable>
+            </View>
+          )}
           {/* Emergency Contacts Section */}
           <View className="mb-6">
             <View className="flex-row items-center justify-between mb-4">
@@ -341,7 +453,11 @@ export default function SetupScreen() {
                   <View className="items-center">
                     <TextInput
                       value={inactH}
-                      onChangeText={setInactH}
+                      onChangeText={(text) => {
+                        const digits = text.replace(/[^0-9]/g, "");
+                        setInactH(digits);
+                        validateInactivityInline(digits, inactM);
+                      }}
                       onBlur={commitInactivityHM}
                       keyboardType="numeric"
                       placeholder="0"
@@ -353,7 +469,11 @@ export default function SetupScreen() {
                   <View className="items-center">
                     <TextInput
                       value={inactM}
-                      onChangeText={setInactM}
+                      onChangeText={(text) => {
+                        const digits = text.replace(/[^0-9]/g, "");
+                        setInactM(digits);
+                        validateInactivityInline(inactH, digits);
+                      }}
                       onBlur={commitInactivityHM}
                       keyboardType="numeric"
                       placeholder="0"
@@ -363,6 +483,9 @@ export default function SetupScreen() {
                     <TinyLabel text="minutes (0–59)" />
                   </View>
                 </View>
+                {settingErrors.inactivity && (
+                  <Text className="text-xs text-red-600 mt-1">{settingErrors.inactivity}</Text>
+                )}
               </View>
 
               {/* Battery Threshold (1–100) */}
@@ -371,13 +494,20 @@ export default function SetupScreen() {
                 <Text className="text-sm text-gray-500 dark:text-gray-400 mb-3">Battery % for low-battery alert</Text>
                 <TextInput
                   value={batteryVal}
-                  onChangeText={setBatteryVal}
+                  onChangeText={(text) => {
+                    const digits = text.replace(/[^0-9]/g, "");
+                    setBatteryVal(digits);
+                    validateBatteryInline(digits);
+                  }}
                   onBlur={commitBattery}
                   keyboardType="numeric"
                   placeholder="10"
                   maxLength={3}
                   className="bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 rounded w-24 text-center"
                 />
+                {settingErrors.battery && (
+                  <Text className="text-xs text-red-600 mt-1">{settingErrors.battery}</Text>
+                )}
               </View>
 
               {/* Update Interval (MM SS -> seconds) */}
@@ -389,7 +519,11 @@ export default function SetupScreen() {
                   <View className="items-center">
                     <TextInput
                       value={intM}
-                      onChangeText={setIntM}
+                      onChangeText={(text) => {
+                        const digits = text.replace(/[^0-9]/g, "");
+                        setIntM(digits);
+                        validateIntervalInline(digits, intS);
+                      }}
                       onBlur={commitIntervalMS}
                       keyboardType="numeric"
                       placeholder="0"
@@ -401,7 +535,11 @@ export default function SetupScreen() {
                   <View className="items-center">
                     <TextInput
                       value={intS}
-                      onChangeText={setIntS}
+                      onChangeText={(text) => {
+                        const digits = text.replace(/[^0-9]/g, "");
+                        setIntS(digits);
+                        validateIntervalInline(intM, digits);
+                      }}
                       onBlur={commitIntervalMS}
                       keyboardType="numeric"
                       placeholder="0"
@@ -411,6 +549,9 @@ export default function SetupScreen() {
                     <TinyLabel text="seconds (0–59)" />
                   </View>
                 </View>
+                {settingErrors.interval && (
+                  <Text className="text-xs text-red-600 mt-1">{settingErrors.interval}</Text>
+                )}
               </View>
 
               {/* Toggles */}
@@ -475,87 +616,133 @@ export default function SetupScreen() {
       </ScrollView>
 
       {/* Add/Edit Contact Modal */}
-      <Modal visible={showAddContact} animationType="slide" presentationStyle="pageSheet">
-        <View className="flex-1 bg-gray-50 dark:bg-gray-900">
-          <View className="bg-white dark:bg-gray-800 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-            <View className="flex-row items-center justify-between">
-              <Text className="text-lg font-semibold text-gray-900 dark:text-white">
-                {editingContact ? "Edit Contact" : "Add Emergency Contact"}
-              </Text>
-              <Pressable
-                onPress={() => {
-                  setShowAddContact(false);
-                  setEditingContact(null);
-                  setNewContact({ name: "", phoneNumber: "", isPrimary: false });
-                  setCountryCode("+94");
-                  setLocalPhone("");
-                }}
-              >
-                <Ionicons name="close" size={24} color="#6b7280" />
-              </Pressable>
-            </View>
-          </View>
-
-          <ScrollView className="flex-1 p-4">
-            <View className="space-y-4">
-              <View>
-                <Text className="text-base font-medium text-gray-900 dark:text-white mb-2">Contact Name</Text>
-                <TextInput
-                  value={newContact.name}
-                  onChangeText={(text) => setNewContact({ ...newContact, name: text })}
-                  placeholder="Enter contact name"
-                  className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 text-gray-900 dark:text-white"
-                />
+      <Modal
+        visible={showAddContact}
+        animationType="fade"
+        transparent
+        onRequestClose={() => {
+          setShowAddContact(false);
+          setEditingContact(null);
+          setNewContact({ name: "", phoneNumber: "", isPrimary: false });
+          setCountryCode("+94");
+          setLocalPhone("");
+        }}
+      >
+        <TouchableWithoutFeedback
+          onPress={() => {
+            setShowAddContact(false);
+            setEditingContact(null);
+            setNewContact({ name: "", phoneNumber: "", isPrimary: false });
+            setCountryCode("+94");
+            setLocalPhone("");
+          }}
+        >
+          <View className="flex-1 bg-black/50" />
+        </TouchableWithoutFeedback>
+        <View className="absolute left-4 right-4 top-[10%] bottom-[10%]">
+          <View className="flex-1 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-800">
+            <View className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white/90 dark:bg-gray-900/90">
+              <View className="flex-row items-center justify-between">
+                <View className="flex-row items-center space-x-2">
+                  <View className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/40 items-center justify-center">
+                    <Ionicons name="person-add" size={20} color="#2563eb" />
+                  </View>
+                  <Text className="text-lg font-semibold text-gray-900 dark:text-white">
+                    {editingContact ? "Edit Contact" : "Add Emergency Contact"}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    setShowAddContact(false);
+                    setEditingContact(null);
+                    setNewContact({ name: "", phoneNumber: "", isPrimary: false });
+                    setCountryCode("+94");
+                    setLocalPhone("");
+                  }}
+                >
+                  <Ionicons name="close" size={24} color="#6b7280" />
+                </Pressable>
               </View>
+            </View>
 
-              <View>
-                <Text className="text-base font-medium text-gray-900 dark:text-white mb-2">Phone Number</Text>
-                <View className="flex-row">
-                  <Pressable
-                    onPress={() => setShowCountryModal(true)}
-                    className="w-44 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg mr-2 px-4 py-3 flex-row items-center justify-between"
-                  >
-                    <Text className="text-gray-900 dark:text-white">{countryCode}</Text>
-                    <Ionicons name="chevron-down" size={16} color="#6b7280" />
-                  </Pressable>
+            <ScrollView className="flex-1 p-4">
+              <View className="space-y-4">
+                <View>
+                  <Text className="text-base font-medium text-gray-900 dark:text-white mb-2">Contact Name</Text>
                   <TextInput
-                    value={localPhone}
-                    onChangeText={setLocalPhone}
-                    placeholder="Enter local number"
-                    keyboardType="phone-pad"
-                    className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-3 text-gray-900 dark:text-white"
+                    value={newContact.name}
+                    onChangeText={(text) => {
+                      setNewContact({ ...newContact, name: text });
+                      setContactErrors((prev) => ({
+                        ...prev,
+                        name: text.trim().length >= 2 ? undefined : "Enter at least 2 characters.",
+                      }));
+                    }}
+                    placeholder="Enter contact name"
+                    className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 text-gray-900 dark:text-white"
+                  />
+                  {contactErrors.name && (
+                    <Text className="text-xs text-red-600 mt-1">{contactErrors.name}</Text>
+                  )}
+                </View>
+
+                <View>
+                  <Text className="text-base font-medium text-gray-900 dark:text-white mb-2">Phone Number</Text>
+                  <View className="flex-row">
+                    <Pressable
+                      onPress={() => setShowCountryModal(true)}
+                      className="w-44 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg mr-2 px-4 py-3 flex-row items-center justify-between"
+                    >
+                      <Text className="text-gray-900 dark:text-white">{countryCode}</Text>
+                      <Ionicons name="chevron-down" size={16} color="#6b7280" />
+                    </Pressable>
+                    <TextInput
+                      value={localPhone}
+                      onChangeText={(val) => {
+                        const digits = val.replace(/[^0-9]/g, "");
+                        setLocalPhone(digits);
+                        const errors = validateContactFields(newContact.name, digits);
+                        setContactErrors((prev) => ({ ...prev, phone: errors.phone }));
+                      }}
+                      placeholder="Enter local number"
+                      keyboardType="phone-pad"
+                      className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-3 text-gray-900 dark:text-white"
+                    />
+                  </View>
+                  <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Stored as: {countryCode}
+                    {localPhone.replace(/[^0-9]/g, "")}
+                  </Text>
+                  {contactErrors.phone && (
+                    <Text className="text-xs text-red-600 mt-1">{contactErrors.phone}</Text>
+                  )}
+                </View>
+
+                <View className="flex-row items-center justify-between">
+                  <View className="flex-1">
+                    <Text className="text-base font-medium text-gray-900 dark:text-white">Primary Contact</Text>
+                    <Text className="text-sm text-gray-500 dark:text-gray-400">This contact will receive priority alerts</Text>
+                  </View>
+                  <Switch
+                    value={newContact.isPrimary}
+                    onValueChange={(value) => setNewContact({ ...newContact, isPrimary: value })}
+                    trackColor={{ false: "#d1d5db", true: "#10b981" }}
+                    thumbColor="#ffffff"
                   />
                 </View>
-                <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Stored as: {countryCode}
-                  {localPhone.replace(/[^0-9]/g, "")}
+              </View>
+            </ScrollView>
+
+            <View className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white/90 dark:bg-gray-900/90">
+              <Pressable
+                onPress={editingContact ? handleUpdateContact : handleAddContact}
+                className="bg-blue-600 active:bg-blue-700 py-3 rounded-lg"
+              >
+                <Text className="text-white text-center font-medium">
+                  {editingContact ? "Update Contact" : "Add Contact"}
                 </Text>
-              </View>
-
-              <View className="flex-row items-center justify-between">
-                <View className="flex-1">
-                  <Text className="text-base font-medium text-gray-900 dark:text-white">Primary Contact</Text>
-                  <Text className="text-sm text-gray-500 dark:text-gray-400">This contact will receive priority alerts</Text>
-                </View>
-                <Switch
-                  value={newContact.isPrimary}
-                  onValueChange={(value) => setNewContact({ ...newContact, isPrimary: value })}
-                  trackColor={{ false: "#d1d5db", true: "#10b981" }}
-                  thumbColor="#ffffff"
-                />
-              </View>
+              </Pressable>
             </View>
-          </ScrollView>
-
-          <View className="p-4 border-t border-gray-200 dark:border-gray-700">
-            <Pressable
-              onPress={editingContact ? handleUpdateContact : handleAddContact}
-              className="bg-blue-600 active:bg-blue-700 py-3 rounded-lg"
-            >
-              <Text className="text-white text-center font-medium">
-                {editingContact ? "Update Contact" : "Add Contact"}
-              </Text>
-            </Pressable>
           </View>
         </View>
       </Modal>
@@ -568,6 +755,54 @@ export default function SetupScreen() {
         options={COUNTRY_CODES}
         onSelect={(v) => setCountryCode(v)}
       />
+
+      {/* Delete contact confirmation */}
+      <Modal
+        visible={confirmDelete.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmDelete({ visible: false, contactId: null, name: "" })}
+      >
+        <TouchableWithoutFeedback onPress={() => setConfirmDelete({ visible: false, contactId: null, name: "" })}>
+          <View className="flex-1 bg-black/40" />
+        </TouchableWithoutFeedback>
+        <View
+          className="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-2xl border border-gray-200 dark:border-gray-700"
+          style={{ position: "absolute", left: 16, right: 16, top: "30%" }}
+        >
+          <View className="flex-row items-center justify-between mb-3">
+            <View className="flex-row items-center space-x-2">
+              <View className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/50 items-center justify-center">
+                <Ionicons name="trash" size={20} color="#dc2626" />
+              </View>
+              <Text className="text-lg font-bold text-gray-900 dark:text-white">Delete contact?</Text>
+            </View>
+            <Pressable onPress={() => setConfirmDelete({ visible: false, contactId: null, name: "" })}>
+              <Ionicons name="close" size={22} color="#6b7280" />
+            </Pressable>
+          </View>
+          <Text className="text-sm text-gray-700 dark:text-gray-300 mb-4">
+            This will remove <Text className="font-semibold">{confirmDelete.name}</Text> from your emergency contacts.
+          </Text>
+          <View className="flex-row space-x-3">
+            <Pressable
+              onPress={() => setConfirmDelete({ visible: false, contactId: null, name: "" })}
+              className="flex-1 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg py-3 items-center"
+            >
+              <Text className="text-gray-800 dark:text-gray-100 font-semibold">Cancel</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                if (confirmDelete.contactId) removeEmergencyContact(confirmDelete.contactId);
+                setConfirmDelete({ visible: false, contactId: null, name: "" });
+              }}
+              className="flex-1 bg-red-600 active:bg-red-700 rounded-lg py-3 items-center"
+            >
+              <Text className="text-white font-semibold">Delete</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

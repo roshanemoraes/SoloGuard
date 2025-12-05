@@ -3,9 +3,10 @@ import {
   View,
   Text,
   Pressable,
-  Alert,
   ScrollView,
   RefreshControl,
+  Modal,
+  TouchableWithoutFeedback,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -17,6 +18,9 @@ import * as Battery from "expo-battery"; // for enum values
 export default function HomeScreen() {
   const router = useRouter();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showSOSConfirm, setShowSOSConfirm] = useState(false);
+  const [sosSending, setSosSending] = useState(false);
+  const [sosResult, setSosResult] = useState<null | { status: "success" | "error"; message: string }>(null);
 
   const {
     isMonitoring,
@@ -25,12 +29,28 @@ export default function HomeScreen() {
     emergencyContacts,
     isEmergencyMode,
     settings,
+    updateBatteryStatus,
   } = useAppStore();
+  const hasActiveContacts = emergencyContacts.some((c) => c.isActive);
 
   useEffect(() => {
     // Initialize monitoring on app start
     initializeMonitoring();
   }, []);
+
+  useEffect(() => {
+    // Realtime battery listener even when monitoring is paused
+    batteryService.startBatteryMonitoring(
+      (status) => {
+        updateBatteryStatus(status);
+      },
+      settings.updateInterval * 1000
+    );
+
+    return () => {
+      batteryService.stopBatteryMonitoring();
+    };
+  }, [settings.updateInterval, updateBatteryStatus]);
 
   const initializeMonitoring = async () => {
     try {
@@ -40,32 +60,36 @@ export default function HomeScreen() {
     }
   };
 
-  const handleSOSPress = async () => {
-    Alert.alert(
-      "🚨 EMERGENCY SOS 🚨",
-      "Are you sure you want to send an emergency alert to your contacts?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "SEND SOS",
-          style: "destructive",
-          onPress: async () => {
-            const success = await monitoringService.sendSOSAlert("manual");
-            if (success) {
-              Alert.alert(
-                "SOS Sent",
-                "Emergency alert has been sent to your contacts."
-              );
-            } else {
-              Alert.alert(
-                "SOS Failed",
-                "Failed to send emergency alert. Please check your settings."
-              );
-            }
-          },
-        },
-      ]
-    );
+  const handleSOSPress = () => {
+    setShowSOSConfirm(true);
+  };
+
+  const confirmSendSOS = async () => {
+    try {
+      if (!hasActiveContacts || !lastLocation) {
+        setSosResult({
+          status: "error",
+          message: !hasActiveContacts
+            ? "Add an active emergency contact before sending SOS."
+            : "No location available. Please enable location and try again.",
+        });
+        setShowSOSConfirm(false);
+        return;
+      }
+
+      setSosSending(true);
+      const success = await monitoringService.sendSOSAlert("manual");
+      setSosResult(
+        success
+          ? { status: "success", message: "SOS sent to your contacts." }
+          : { status: "error", message: "Failed to send SOS. Check settings." }
+      );
+    } catch (error) {
+      setSosResult({ status: "error", message: "Failed to send SOS. Please retry." });
+    } finally {
+      setSosSending(false);
+      setShowSOSConfirm(false);
+    }
   };
 
   const toggleMonitoring = async () => {
@@ -76,7 +100,7 @@ export default function HomeScreen() {
         await monitoringService.startMonitoring();
       }
     } catch (error) {
-      Alert.alert("Error", "Failed to toggle monitoring");
+      setSosResult({ status: "error", message: "Failed to toggle monitoring." });
     }
   };
 
@@ -268,6 +292,41 @@ export default function HomeScreen() {
           <Text className="text-white text-xl font-bold mt-2">SOS</Text>
           <Text className="text-red-100 text-sm mt-1">Emergency Alert</Text>
         </Pressable>
+        {sosResult && (
+          <View className="mt-3 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center space-x-2 flex-1 pr-2">
+                <View
+                  className="w-9 h-9 rounded-full items-center justify-center"
+                  style={{
+                    backgroundColor:
+                      sosResult.status === "success" ? "#dcfce7" : "#fee2e2",
+                  }}
+                >
+                  <Ionicons
+                    name={sosResult.status === "success" ? "checkmark-circle" : "alert-circle"}
+                    size={20}
+                    color={sosResult.status === "success" ? "#16a34a" : "#dc2626"}
+                  />
+                </View>
+                <View className="flex-1">
+                  <Text
+                    className="text-sm font-semibold"
+                    style={{ color: sosResult.status === "success" ? "#166534" : "#991b1b" }}
+                  >
+                    {sosResult.status === "success" ? "SOS Sent" : "SOS Issue"}
+                  </Text>
+                  <Text className="text-xs text-gray-600 dark:text-gray-300">
+                    {sosResult.message}
+                  </Text>
+                </View>
+              </View>
+              <Pressable onPress={() => setSosResult(null)} className="p-1">
+                <Ionicons name="close" size={18} color="#6b7280" />
+              </Pressable>
+            </View>
+          </View>
+        )}
       </View>
 
       {/* Quick Actions */}
@@ -352,6 +411,71 @@ export default function HomeScreen() {
           </Text>
         </View>
       </View>
+
+      {/* SOS confirmation modal */}
+      <Modal
+        visible={showSOSConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSOSConfirm(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowSOSConfirm(false)}>
+          <View className="flex-1 bg-black/40" />
+        </TouchableWithoutFeedback>
+        <View
+          className="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-2xl border border-gray-200 dark:border-gray-700"
+          style={{ position: "absolute", left: 16, right: 16, top: "25%" }}
+        >
+          <View className="flex-row items-center justify-between mb-3">
+            <View className="flex-row items-center space-x-2">
+              <View className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/50 items-center justify-center">
+                <Ionicons name="warning" size={22} color="#dc2626" />
+              </View>
+              <Text className="text-lg font-bold text-gray-900 dark:text-white">
+                Send SOS?
+              </Text>
+            </View>
+            <Pressable onPress={() => setShowSOSConfirm(false)}>
+              <Ionicons name="close" size={22} color="#6b7280" />
+            </Pressable>
+          </View>
+          <Text className="text-sm text-gray-700 dark:text-gray-300 mb-4">
+            We will send an SOS to your emergency contacts with your latest location and profile details.
+          </Text>
+          {(!hasActiveContacts || !lastLocation) && (
+            <View className="bg-red-50 dark:bg-red-900/30 rounded-lg p-3 border border-red-100 dark:border-red-800 mb-4">
+              <View className="flex-row space-x-2">
+                <Ionicons name="information-circle" size={16} color="#dc2626" />
+                <View className="flex-1">
+                  <Text className="text-xs text-red-800 dark:text-red-200">
+                    Tip: Add an active contact and ensure location is available before sending.
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
+          <View className="flex-row space-x-3">
+            <Pressable
+              onPress={() => setShowSOSConfirm(false)}
+              className="flex-1 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg py-3 items-center"
+            >
+              <Text className="text-gray-800 dark:text-gray-100 font-semibold">Cancel</Text>
+            </Pressable>
+            <Pressable
+              onPress={confirmSendSOS}
+              disabled={sosSending}
+              className={`flex-1 rounded-lg py-3 items-center ${
+                sosSending ? "bg-red-400" : "bg-red-600 active:bg-red-700"
+              }`}
+            >
+              <Text className="text-white font-semibold">
+                {sosSending ? "Sending..." : "Send SOS"}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
+
