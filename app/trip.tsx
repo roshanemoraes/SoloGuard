@@ -17,8 +17,10 @@ export default function TripScreen() {
     name: "",
     latitude: "",
     longitude: "",
+    address: "",
     type: "custom" as const,
   });
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const preloadedDestinations: TripDestination[] = [
     {
@@ -59,6 +61,71 @@ export default function TripScreen() {
     },
   ];
 
+  const sriLankaPlaces: {
+    name: string;
+    latitude: number;
+    longitude: number;
+    address?: string;
+    type?: TripDestination["type"];
+  }[] = [
+    {
+      name: "Colombo Fort Railway Station",
+      latitude: 6.9344,
+      longitude: 79.8428,
+      address: "Colombo 01, Western Province",
+      type: "safe_area",
+    },
+    {
+      name: "Bandaranaike International Airport",
+      latitude: 7.1808,
+      longitude: 79.8841,
+      address: "Katunayake, Western Province",
+      type: "safe_area",
+    },
+    {
+      name: "Temple of the Sacred Tooth Relic",
+      latitude: 7.2936,
+      longitude: 80.6413,
+      address: "Kandy, Central Province",
+      type: "safe_area",
+    },
+    {
+      name: "Galle Fort",
+      latitude: 6.0261,
+      longitude: 80.217,
+      address: "Galle, Southern Province",
+      type: "safe_area",
+    },
+    {
+      name: "Jaffna Town",
+      latitude: 9.6615,
+      longitude: 80.0255,
+      address: "Jaffna, Northern Province",
+      type: "safe_area",
+    },
+    {
+      name: "Ella Town",
+      latitude: 6.8667,
+      longitude: 81.0467,
+      address: "Ella, Uva Province",
+      type: "safe_area",
+    },
+    {
+      name: "Anuradhapura Sacred City",
+      latitude: 8.335,
+      longitude: 80.4037,
+      address: "Anuradhapura, North Central Province",
+      type: "safe_area",
+    },
+    {
+      name: "Sigiriya Rock Fortress",
+      latitude: 7.957,
+      longitude: 80.7603,
+      address: "Sigiriya, Central Province",
+      type: "safe_area",
+    },
+  ];
+
   const handleAddDestination = () => {
     if (
       !newDestination.name.trim() ||
@@ -84,16 +151,19 @@ export default function TripScreen() {
         latitude: lat,
         longitude: lng,
         timestamp: Date.now(),
+        address: newDestination.address?.trim() || undefined,
       },
       type: newDestination.type,
       isPreloaded: false,
     };
 
     setDestinations([...destinations, destination]);
+    setShowSuggestions(false);
     setNewDestination({
       name: "",
       latitude: "",
       longitude: "",
+      address: "",
       type: "custom",
     });
   };
@@ -207,6 +277,14 @@ export default function TripScreen() {
   );
 
   const allDestinations = [...preloadedDestinations, ...destinations];
+  const matchingPlaces =
+    newDestination.name.trim().length === 0
+      ? []
+      : sriLankaPlaces.filter((place) =>
+          place.name
+            .toLowerCase()
+            .includes(newDestination.name.trim().toLowerCase())
+        );
 
   return (
     <View className="flex-1 bg-gray-50 dark:bg-gray-900">
@@ -228,9 +306,46 @@ export default function TripScreen() {
                   onChangeText={(text) =>
                     setNewDestination({ ...newDestination, name: text })
                   }
+                  onFocus={() => setShowSuggestions(true)}
                   placeholder="e.g., Hotel, Restaurant, Landmark"
                   className="bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 text-gray-900 dark:text-white"
                 />
+                {showSuggestions && matchingPlaces.length > 0 && (
+                  <View className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg mt-2 max-h-64">
+                    <FlatList
+                      data={matchingPlaces.slice(0, 8)}
+                      keyExtractor={(item) => item.name}
+                      renderItem={({ item }) => (
+                        <Pressable
+                          onPress={() => {
+                            setNewDestination({
+                              ...newDestination,
+                              name: item.name,
+                              latitude: item.latitude.toString(),
+                              longitude: item.longitude.toString(),
+                              address: item.address || "",
+                              type: item.type || "custom",
+                            });
+                            setShowSuggestions(false);
+                          }}
+                          className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 last:border-b-0 active:bg-gray-50 dark:active:bg-gray-700"
+                        >
+                          <Text className="text-base font-medium text-gray-900 dark:text-white">
+                            {item.name}
+                          </Text>
+                          {item.address && (
+                            <Text className="text-sm text-gray-500 dark:text-gray-400">
+                              {item.address}
+                            </Text>
+                          )}
+                          <Text className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                            {item.latitude.toFixed(4)}, {item.longitude.toFixed(4)}
+                          </Text>
+                        </Pressable>
+                      )}
+                    />
+                  </View>
+                )}
               </View>
 
               <View className="flex-row space-x-3">
@@ -243,6 +358,7 @@ export default function TripScreen() {
                     onChangeText={(text) =>
                       setNewDestination({ ...newDestination, latitude: text })
                     }
+                    onFocus={() => setShowSuggestions(false)}
                     placeholder="6.9271"
                     keyboardType="numeric"
                     className="bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 text-gray-900 dark:text-white"
@@ -258,6 +374,7 @@ export default function TripScreen() {
                     onChangeText={(text) =>
                       setNewDestination({ ...newDestination, longitude: text })
                     }
+                    onFocus={() => setShowSuggestions(false)}
                     placeholder="79.8612"
                     keyboardType="numeric"
                     className="bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 text-gray-900 dark:text-white"
