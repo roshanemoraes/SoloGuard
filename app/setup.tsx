@@ -39,32 +39,76 @@ function ModalSelect<T extends string>({
   options: { label: string; value: T }[];
   title: string;
 }) {
+  const [query, setQuery] = useState("");
+  const filtered = options.filter((o) =>
+    o.label.toLowerCase().includes(query.trim().toLowerCase())
+  );
+  const favorites = options.slice(0, 3);
+
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <View className="flex-1 bg-gray-50 dark:bg-gray-900">
-        <View className="bg-white dark:bg-gray-800 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-          <View className="flex-row items-center justify-between">
-            <Text className="text-lg font-semibold text-gray-900 dark:text-white">{title}</Text>
-            <Pressable onPress={onClose}>
-              <Ionicons name="close" size={24} color="#6b7280" />
-            </Pressable>
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+      <Pressable onPress={onClose} className="flex-1 bg-black/40" />
+      <View className="absolute left-4 right-4 top-[12%] bottom-[12%]">
+        <View className="flex-1 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
+          <View className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-600 to-cyan-500">
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center space-x-2">
+                <View className="w-10 h-10 rounded-full bg-white/20 items-center justify-center">
+                  <Ionicons name="flag" size={20} color="#fff" />
+                </View>
+                <Text className="text-lg font-semibold text-white">{title}</Text>
+              </View>
+              <Pressable onPress={onClose}>
+                <Ionicons name="close" size={24} color="#e5e7eb" />
+              </Pressable>
+            </View>
+            <View className="mt-3 bg-white/15 rounded-lg px-3 py-2 border border-white/20">
+              <TextInput
+                placeholder="Search country or code"
+                placeholderTextColor="#e5e7eb"
+                value={query}
+                onChangeText={setQuery}
+                className="text-white"
+              />
+            </View>
           </View>
+
+          <View className="px-4 py-3">
+            <View className="flex-row flex-wrap" style={{ rowGap: 8 }}>
+              {favorites.map((fav) => (
+                <Pressable
+                  key={fav.value}
+                  onPress={() => {
+                    onSelect(fav.value as T);
+                    onClose();
+                  }}
+                  className="mr-2 px-3 py-2 rounded-full bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800"
+                >
+                  <Text className="text-xs font-semibold text-blue-800 dark:text-blue-100">{fav.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          <FlatList
+            data={filtered}
+            keyExtractor={(item) => item.value}
+            renderItem={({ item }) => (
+              <Pressable
+                onPress={() => {
+                  onSelect(item.value as T);
+                  onClose();
+                }}
+                className="px-4 py-4 border-b border-gray-100 dark:border-gray-800 flex-row items-center"
+              >
+                <View className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-900/40 items-center justify-center mr-3">
+                  <Ionicons name="earth" size={16} color="#2563eb" />
+                </View>
+                <Text className="text-base text-gray-900 dark:text-white">{item.label}</Text>
+              </Pressable>
+            )}
+          />
         </View>
-        <FlatList
-          data={options}
-          keyExtractor={(item) => item.value}
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => {
-                onSelect(item.value as T);
-                onClose();
-              }}
-              className="px-4 py-4 border-b border-gray-200 dark:border-gray-700"
-            >
-              <Text className="text-base text-gray-900 dark:text-white">{item.label}</Text>
-            </Pressable>
-          )}
-        />
       </View>
     </Modal>
   );
