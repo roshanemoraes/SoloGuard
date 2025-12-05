@@ -203,7 +203,9 @@ export class MonitoringService {
       const result = await smsService.sendBatteryLowAlert(
         store.lastLocation,
         store.emergencyContacts,
-        battery.batteryLevel
+        battery.batteryLevel,
+        store.userProfile,
+        store.settings.preferMMS
       );
 
       if (result.success) {
@@ -240,7 +242,9 @@ export class MonitoringService {
         store.lastLocation,
         store.emergencyContacts,
         store.batteryStatus?.batteryLevel || 0,
-        type
+        type,
+        store.userProfile,
+        store.settings.preferMMS
       );
 
       if (result.success) {

@@ -8,7 +8,8 @@ import {
   EmergencyContact, 
   AppSettings, 
   MonitoringLog,
-  SOSAlert 
+  SOSAlert,
+  UserProfile 
 } from '../types';
 
 interface AppStore extends AppState {
@@ -23,6 +24,7 @@ interface AppStore extends AppState {
   addMonitoringLog: (log: MonitoringLog) => void;
   setEmergencyMode: (isEmergency: boolean) => void;
   clearLogs: () => void;
+  updateUserProfile: (profile: Partial<UserProfile>) => void;
 }
 
 const defaultSettings: AppSettings = {
@@ -32,6 +34,15 @@ const defaultSettings: AppSettings = {
   autoSOSEnabled: true,
   notificationsEnabled: true,
   updateInterval: 60, // 60 seconds
+  preferMMS: false,
+};
+
+const defaultProfile: UserProfile = {
+  fullName: '',
+  username: '',
+  phoneNumber: '',
+  email: '',
+  medicalInfo: '',
 };
 
 export const useAppStore = create<AppStore>()(
@@ -45,6 +56,7 @@ export const useAppStore = create<AppStore>()(
       settings: defaultSettings,
       monitoringLogs: [],
       isEmergencyMode: false,
+      userProfile: defaultProfile,
 
       // Actions
       setMonitoring: (isMonitoring) => set({ isMonitoring }),
@@ -78,6 +90,10 @@ export const useAppStore = create<AppStore>()(
       setEmergencyMode: (isEmergencyMode) => set({ isEmergencyMode }),
       
       clearLogs: () => set({ monitoringLogs: [] }),
+
+      updateUserProfile: (profile) => set((state) => ({
+        userProfile: { ...state.userProfile, ...profile }
+      })),
     }),
     {
       name: 'safeguard-storage',
@@ -86,6 +102,7 @@ export const useAppStore = create<AppStore>()(
         emergencyContacts: state.emergencyContacts,
         settings: state.settings,
         monitoringLogs: state.monitoringLogs,
+        userProfile: state.userProfile,
       }),
     }
   )

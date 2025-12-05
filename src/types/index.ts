@@ -25,6 +25,15 @@ export interface EmergencyContact {
   isActive: boolean;
 }
 
+// User profile
+export interface UserProfile {
+  fullName: string;
+  username: string;
+  phoneNumber: string;
+  email?: string;
+  medicalInfo?: string;
+}
+
 // Motion sensor data types
 export interface MotionData {
   acceleration: {
@@ -77,6 +86,7 @@ export interface AppSettings {
   autoSOSEnabled: boolean;
   notificationsEnabled: boolean;
   updateInterval: number; // seconds
+  preferMMS?: boolean; // try MMS first, fallback to SMS
 }
 
 // Monitoring log types
@@ -98,4 +108,5 @@ export interface AppState {
   settings: AppSettings;
   monitoringLogs: MonitoringLog[];
   isEmergencyMode: boolean;
+  userProfile: UserProfile;
 }

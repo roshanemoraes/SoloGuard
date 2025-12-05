@@ -428,24 +428,39 @@ export default function SetupScreen() {
                   />
                 </View>
 
-                <View className="flex-row items-center justify-between">
-                  <View className="flex-1 pr-4">
-                    <Text className="text-base font-medium text-gray-900 dark:text-white">Auto SOS</Text>
-                    <Text className="text-sm text-gray-500 dark:text-gray-400">Send SOS automatically on inactivity</Text>
-                  </View>
-                  <Switch
-                    value={settings.autoSOSEnabled}
-                    onValueChange={(value) => handleSettingsChange("autoSOSEnabled", value)}
-                    trackColor={{ false: "#d1d5db", true: "#10b981" }}
-                    thumbColor="#ffffff"
-                  />
+              <View className="flex-row items-center justify-between">
+                <View className="flex-1 pr-4">
+                  <Text className="text-base font-medium text-gray-900 dark:text-white">Auto SOS</Text>
+                  <Text className="text-sm text-gray-500 dark:text-gray-400">Send SOS automatically on inactivity</Text>
                 </View>
+                <Switch
+                  value={settings.autoSOSEnabled}
+                  onValueChange={(value) => handleSettingsChange("autoSOSEnabled", value)}
+                  trackColor={{ false: "#d1d5db", true: "#10b981" }}
+                  thumbColor="#ffffff"
+                />
+              </View>
 
-                <View className="flex-row items-center justify-between">
-                  <View className="flex-1 pr-4">
-                    <Text className="text-base font-medium text-gray-900 dark:text-white">Notifications</Text>
-                    <Text className="text-sm text-gray-500 dark:text-gray-400">Enable push notifications</Text>
-                  </View>
+              <View className="flex-row items-center justify-between">
+                <View className="flex-1 pr-4">
+                  <Text className="text-base font-medium text-gray-900 dark:text-white">Prefer MMS</Text>
+                  <Text className="text-sm text-gray-500 dark:text-gray-400">
+                    Try MMS first (needs data), automatically fall back to SMS
+                  </Text>
+                </View>
+                <Switch
+                  value={!!settings.preferMMS}
+                  onValueChange={(value) => handleSettingsChange("preferMMS", value)}
+                  trackColor={{ false: "#d1d5db", true: "#10b981" }}
+                  thumbColor="#ffffff"
+                />
+              </View>
+
+              <View className="flex-row items-center justify-between">
+                <View className="flex-1 pr-4">
+                  <Text className="text-base font-medium text-gray-900 dark:text-white">Notifications</Text>
+                  <Text className="text-sm text-gray-500 dark:text-gray-400">Enable push notifications</Text>
+                </View>
                   <Switch
                     value={settings.notificationsEnabled}
                     onValueChange={(value) => handleSettingsChange("notificationsEnabled", value)}

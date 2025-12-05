@@ -347,6 +347,9 @@ export default function HomeScreen() {
           <Text className="text-sm text-gray-600 dark:text-gray-300">
             Auto SOS: {settings.autoSOSEnabled ? "Enabled" : "Disabled"}
           </Text>
+          <Text className="text-sm text-gray-600 dark:text-gray-300">
+            Prefer MMS: {settings.preferMMS ? "Yes (fallback to SMS)" : "No (SMS only)"}
+          </Text>
         </View>
       </View>
     </ScrollView>
