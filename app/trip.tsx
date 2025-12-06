@@ -17,6 +17,7 @@ import {
 import MapView, { Marker, MapPressEvent, PROVIDER_GOOGLE } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
 import { TripDestination } from "../src/types";
+import { useI18n } from "../src/stores/useI18n";
 
 type TripType = TripDestination["type"];
 type BasePlace = {
@@ -56,6 +57,7 @@ export default function TripScreen() {
   const [suggestions, setSuggestions] = useState<BasePlace[]>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TripDestination | null>(null);
+  const { t } = useI18n();
 
   const fallbackPlaces: BasePlace[] = [
     // Outdoors
@@ -620,12 +622,12 @@ export default function TripScreen() {
         <View className="p-4 flex-1">
           {/* Add Destination Section */}
           <View className="mb-6">
-            <View className="items-center mb-4">
+            <View className="mb-3">
               <Text className="text-2xl font-bold text-gray-900 dark:text-white">
-                Where to?
+                {t("whereTo")}
               </Text>
               <Text className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                Places to go, things to do, hotels...
+                {t("subtitle")}
               </Text>
             </View>
 
@@ -654,7 +656,7 @@ export default function TripScreen() {
                       }
                     }}
                     onFocus={() => setShowSuggestions(searchQuery.trim().length > 0)}
-                    placeholder="Places to go, things to do, hotels..."
+                    placeholder={t("searchPlaceholder")}
                     className="flex-1 py-3 text-gray-900 dark:text-white"
                   />
                   {searchQuery.length > 0 && (
@@ -675,7 +677,7 @@ export default function TripScreen() {
                 >
                   <Ionicons name="map" size={18} color="#16a34a" />
                   <Text className="ml-2 text-sm font-semibold text-green-700 dark:text-green-200">
-                    Pick on Google Maps
+                    {t("pickOnMap")}
                   </Text>
                 </Pressable>
                 {showSuggestions && searchQuery.trim().length > 0 && (
@@ -775,7 +777,7 @@ export default function TripScreen() {
           <View className="flex-row items-center mb-4 mt-2">
             <View className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
             <Text className="mx-3 text-sm font-semibold text-gray-500 dark:text-gray-400">
-              Your trip destinations ({destinations.length})
+              {t("yourTripDestinations", { count: destinations.length })}
             </Text>
             <View className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
           </View>
@@ -851,10 +853,10 @@ export default function TripScreen() {
               <View className="bg-white dark:bg-gray-800 rounded-lg p-6 items-center">
                 <Ionicons name="map-outline" size={48} color="#9ca3af" />
                 <Text className="text-lg font-medium text-gray-900 dark:text-white mt-2 mb-1">
-                  No Destinations
+                  {t("noDestinations")}
                 </Text>
                 <Text className="text-center text-gray-500 dark:text-gray-400">
-                  Search above to add destinations to your trip.
+                  {t("noDestinationsDesc")}
                 </Text>
               </View>
             ) : (
@@ -912,7 +914,7 @@ export default function TripScreen() {
                 <View className="flex-row items-center space-x-2">
                   <Ionicons name="shield-checkmark" size={18} color="#2563eb" />
                   <Text className="text-base font-semibold text-blue-900 dark:text-blue-100">
-                    Safety tips
+                    {t("safetyTips")}
                   </Text>
                 </View>
                 <Ionicons
@@ -944,7 +946,7 @@ export default function TripScreen() {
               className="bg-red-600 active:bg-red-700 rounded-full px-4 py-3 shadow-lg flex-row items-center justify-center"
             >
               <Ionicons name="alert-circle" size={18} color="#fff" />
-              <Text className="text-white font-semibold ml-2">Need help?</Text>
+              <Text className="text-white font-semibold ml-2">{t("needHelp")}</Text>
             </Pressable>
           </View>
         </View>
@@ -1132,16 +1134,16 @@ export default function TripScreen() {
         transparent
         onRequestClose={() => setShowMapPicker(false)}
       >
-        <View className="flex-1 bg-black/40">
-          <View className="mt-12 flex-1 bg-white dark:bg-gray-900 rounded-t-2xl overflow-hidden">
-            <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
-              <Text className="text-lg font-bold text-gray-900 dark:text-white">
-                Select on Google Maps
-              </Text>
-              <Pressable onPress={() => setShowMapPicker(false)}>
-                <Ionicons name="close" size={22} color="#6b7280" />
-              </Pressable>
-            </View>
+            <View className="flex-1 bg-black/40">
+              <View className="mt-12 flex-1 bg-white dark:bg-gray-900 rounded-t-2xl overflow-hidden">
+                <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
+                  <Text className="text-lg font-bold text-gray-900 dark:text-white">
+                    {t("pickOnMapModalTitle")}
+                  </Text>
+                  <Pressable onPress={() => setShowMapPicker(false)}>
+                    <Ionicons name="close" size={22} color="#6b7280" />
+                  </Pressable>
+                </View>
 
             <MapView
               provider={PROVIDER_GOOGLE}
@@ -1162,10 +1164,10 @@ export default function TripScreen() {
               )}
             </MapView>
 
-            <View className="px-4 py-3 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
-              <Text className="text-sm text-gray-600 dark:text-gray-300 mb-1">
-                Tap on the map to drop a pin, then name it.
-              </Text>
+              <View className="px-4 py-3 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+                <Text className="text-sm text-gray-600 dark:text-gray-300 mb-1">
+                  {t("mapTapHint")}
+                </Text>
               <View className="flex-row items-center bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3">
                 <Ionicons name="pricetag" size={18} color="#6b7280" />
                 <TextInput
@@ -1175,12 +1177,12 @@ export default function TripScreen() {
                   className="flex-1 py-3 px-2 text-gray-900 dark:text-white"
                 />
               </View>
-              <Pressable
-                onPress={handleAddFromMap}
-                className="mt-3 py-3 rounded-lg bg-green-600 active:bg-green-700 items-center"
-              >
-                <Text className="text-white font-semibold">Add destination</Text>
-              </Pressable>
+                <Pressable
+                  onPress={handleAddFromMap}
+                  className="mt-3 py-3 rounded-lg bg-green-600 active:bg-green-700 items-center"
+                >
+                  <Text className="text-white font-semibold">{t("addDestination")}</Text>
+                </Pressable>
             </View>
           </View>
         </View>
@@ -1200,11 +1202,11 @@ export default function TripScreen() {
                 <Ionicons name="trash" size={20} color="#ef4444" />
               </View>
               <Text className="text-lg font-semibold text-gray-900 dark:text-white">
-                Delete destination
+                {t("deleteTitle")}
               </Text>
             </View>
             <Text className="text-sm text-gray-700 dark:text-gray-300 mb-4">
-              {`Are you sure you want to delete "${deleteTarget?.name || "this destination"}"?`}
+              {t("deleteMessage", { name: deleteTarget?.name || "" })}
             </Text>
             <View className="flex-row justify-end space-x-3">
               <Pressable
@@ -1212,14 +1214,14 @@ export default function TripScreen() {
                 className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700"
               >
                 <Text className="text-sm font-semibold text-gray-700 dark:text-gray-200">
-                  Cancel
+                  {t("cancel")}
                 </Text>
               </Pressable>
               <Pressable
                 onPress={confirmDelete}
                 className="px-4 py-2 rounded-lg bg-red-600 active:bg-red-700"
               >
-                <Text className="text-sm font-semibold text-white">Delete</Text>
+                <Text className="text-sm font-semibold text-white">{t("delete")}</Text>
               </Pressable>
             </View>
           </View>
