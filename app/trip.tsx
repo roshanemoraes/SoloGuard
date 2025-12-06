@@ -55,6 +55,7 @@ export default function TripScreen() {
   const googlePlacesKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY || "";
   const [suggestions, setSuggestions] = useState<BasePlace[]>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<TripDestination | null>(null);
 
   const fallbackPlaces: BasePlace[] = [
     // Outdoors
@@ -308,6 +309,18 @@ export default function TripScreen() {
     );
   };
 
+  const handleDeleteDestination = (item: TripDestination) => {
+    setDeleteTarget(item);
+  };
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return;
+    setDestinations((prev) => prev.filter((d) => d.id !== deleteTarget.id));
+    setDeleteTarget(null);
+  };
+
+  const cancelDelete = () => setDeleteTarget(null);
+
   const handleExploreNearby = async (item: TripDestination) => {
     setExploreLoading(true);
     setExploreResults([]);
@@ -386,22 +399,6 @@ export default function TripScreen() {
     } finally {
       setExploreLoading(false);
     }
-  };
-
-  const handleDeleteDestination = (id: string) => {
-    Alert.alert(
-      "Delete Destination",
-      "Are you sure you want to delete this destination?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () =>
-            setDestinations((prev) => prev.filter((d) => d.id !== id)),
-        },
-      ]
-    );
   };
 
   const fetchAutocomplete = async (input: string) => {
@@ -548,7 +545,7 @@ export default function TripScreen() {
   const renderDestinationItem = ({ item }: { item: TripDestination }) => (
     <SwipeableCard
       enabled={!item.isPreloaded}
-      onDelete={() => handleDeleteDestination(item.id)}
+      onDelete={() => handleDeleteDestination(item)}
     >
       <View className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
         <View className="flex-row items-start space-x-3">
@@ -1183,6 +1180,46 @@ export default function TripScreen() {
                 className="mt-3 py-3 rounded-lg bg-green-600 active:bg-green-700 items-center"
               >
                 <Text className="text-white font-semibold">Add destination</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete confirmation modal */}
+      <Modal
+        visible={!!deleteTarget}
+        transparent
+        animationType="fade"
+        onRequestClose={cancelDelete}
+      >
+        <View className="flex-1 bg-black/40 items-center justify-center px-6">
+          <View className="bg-white dark:bg-gray-900 rounded-2xl p-5 w-full max-w-md border border-gray-200 dark:border-gray-800">
+            <View className="flex-row items-center mb-3">
+              <View className="w-10 h-10 rounded-full bg-red-50 dark:bg-red-900/30 items-center justify-center mr-3">
+                <Ionicons name="trash" size={20} color="#ef4444" />
+              </View>
+              <Text className="text-lg font-semibold text-gray-900 dark:text-white">
+                Delete destination
+              </Text>
+            </View>
+            <Text className="text-sm text-gray-700 dark:text-gray-300 mb-4">
+              {`Are you sure you want to delete "${deleteTarget?.name || "this destination"}"?`}
+            </Text>
+            <View className="flex-row justify-end space-x-3">
+              <Pressable
+                onPress={cancelDelete}
+                className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700"
+              >
+                <Text className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                  Cancel
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={confirmDelete}
+                className="px-4 py-2 rounded-lg bg-red-600 active:bg-red-700"
+              >
+                <Text className="text-sm font-semibold text-white">Delete</Text>
               </Pressable>
             </View>
           </View>
