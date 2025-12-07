@@ -16,10 +16,24 @@ import {
 } from "react-native";
 import MapView, { Marker, MapPressEvent, PROVIDER_GOOGLE } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
-import { TripDestination } from "../src/types";
+import Constants from "expo-constants";
+import { TripDestination, NearbyPlace } from "../src/types";
+import { useAppStore } from "../src/stores/useAppStore";
 
 export default function TripScreen() {
-  const [destinations, setDestinations] = useState<TripDestination[]>([]);
+  const {
+    tripDestinations,
+    addTripDestination,
+    removeTripDestination,
+    tripNearbyCache,
+    setNearbyPlacesForDestination,
+  } = useAppStore() as unknown as {
+    tripDestinations: TripDestination[];
+    addTripDestination: (d: TripDestination) => void;
+    removeTripDestination: (id: string) => void;
+    tripNearbyCache: Record<string, NearbyPlace[]>;
+    setNearbyPlacesForDestination: (destinationId: string, places: NearbyPlace[]) => void;
+  };
   const [searchQuery, setSearchQuery] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -35,14 +49,32 @@ export default function TripScreen() {
   } | null>(null);
   const [mapPlaceName, setMapPlaceName] = useState("");
   const [showExploreModal, setShowExploreModal] = useState(false);
-  const [exploreResults, setExploreResults] = useState<typeof sriLankaPlaces>([]);
+  const [exploreResults, setExploreResults] = useState<PlaceSuggestion[]>([]);
   const [exploreTitle, setExploreTitle] = useState("");
   const [exploreOrigin, setExploreOrigin] = useState<TripDestination | null>(
     null
   );
   const [exploreAdded, setExploreAdded] = useState<string[]>([]);
   const [exploreLoading, setExploreLoading] = useState(false);
+  const [exploreMoreLoading, setExploreMoreLoading] = useState(false);
+  const [exploreNextPageToken, setExploreNextPageToken] = useState<string | null>(
+    null
+  );
   const googlePlacesKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY || "";
+  type PlaceSuggestion = NearbyPlace;
+  const [searchResults, setSearchResults] = useState<PlaceSuggestion[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [selectingPlaceId, setSelectingPlaceId] = useState<string | null>(null);
+  const placesSessionTokenRef = React.useRef<string | null>(null);
+  const supportsGoogleMapsProvider = Constants.appOwnership !== "expo"; // Expo Go lacks Google Maps SDK
+
+  const getPlacesSessionToken = () => {
+    if (!placesSessionTokenRef.current) {
+      placesSessionTokenRef.current = Math.random().toString(36).slice(2);
+    }
+    return placesSessionTokenRef.current;
+  };
 
   const sriLankaPlaces: {
     name: string;
@@ -244,7 +276,11 @@ export default function TripScreen() {
     }
   };
 
-  const addPlaceToTrip = (place: typeof sriLankaPlaces[number]) => {
+  const addPlaceToTrip = (place: PlaceSuggestion) => {
+    if (typeof place.latitude !== "number" || typeof place.longitude !== "number") {
+      Alert.alert("Missing location", "Couldn't find coordinates for this place.");
+      return;
+    }
     const destination: TripDestination = {
       id: `${Date.now()}-${Math.random()}`,
       name: place.name,
@@ -258,17 +294,62 @@ export default function TripScreen() {
       isPreloaded: false,
     };
 
-    setDestinations((prev) => {
-      const updated = [...prev, destination];
-      setCurrentPage(Math.max(1, Math.ceil(updated.length / pageSize)));
-      return updated;
-    });
+    const prevLen = useAppStore.getState().tripDestinations.length;
+    addTripDestination(destination);
+    const updatedLength = prevLen + 1;
+    setCurrentPage(Math.max(1, Math.ceil(updatedLength / pageSize)));
   };
 
-  const handleSelectPlace = (place: typeof sriLankaPlaces[number]) => {
-    addPlaceToTrip(place);
-    setSearchQuery("");
-    setShowSuggestions(false);
+  const mergePlaces = (
+    existing: PlaceSuggestion[],
+    incoming: PlaceSuggestion[]
+  ): PlaceSuggestion[] => {
+    const seen = new Set(
+      existing.map(
+        (p) =>
+          p.placeId ||
+          `${p.name}-${p.latitude ?? "x"}-${p.longitude ?? "x"}`
+      )
+    );
+    const uniqueIncoming = incoming.filter((p) => {
+      const key = p.placeId || `${p.name}-${p.latitude ?? "x"}-${p.longitude ?? "x"}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return [...existing, ...uniqueIncoming];
+  };
+
+  const handleSelectPlace = async (place: PlaceSuggestion) => {
+    try {
+      if (place.placeId && (!place.latitude || !place.longitude) && googlePlacesKey) {
+        setSelectingPlaceId(place.placeId);
+        const detailsResp = await fetch(
+          `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.placeId}&fields=name,geometry,formatted_address&key=${googlePlacesKey}`
+        );
+        const detailsData = await detailsResp.json();
+        const loc = detailsData.result?.geometry?.location;
+        if (loc?.lat && loc?.lng) {
+          addPlaceToTrip({
+            ...place,
+            latitude: loc.lat,
+            longitude: loc.lng,
+            address: detailsData.result?.formatted_address || place.address,
+          });
+        } else {
+          Alert.alert("Couldn't load place", "Try selecting again or type a different name.");
+        }
+      } else {
+        addPlaceToTrip(place);
+      }
+    } catch (e) {
+      Alert.alert("Couldn't add place", "Please try again.");
+    } finally {
+      setSelectingPlaceId(null);
+      setSearchQuery("");
+      setShowSuggestions(false);
+      placesSessionTokenRef.current = null; // new session for next query
+    }
   };
 
   const handleAddFromMap = () => {
@@ -289,11 +370,10 @@ export default function TripScreen() {
       isPreloaded: false,
     };
 
-    setDestinations((prev) => {
-      const updated = [...prev, destination];
-      setCurrentPage(Math.max(1, Math.ceil(updated.length / pageSize)));
-      return updated;
-    });
+    const prevLen = useAppStore.getState().tripDestinations.length;
+    addTripDestination(destination);
+    const updatedLength = prevLen + 1;
+    setCurrentPage(Math.max(1, Math.ceil(updatedLength / pageSize)));
 
     setMapSelected(null);
     setMapPlaceName("");
@@ -311,60 +391,121 @@ export default function TripScreen() {
     );
   };
 
+  const fetchNearbyPlaces = async (
+    origin: TripDestination,
+    pageToken?: string,
+    fallback: PlaceSuggestion[] = []
+  ) => {
+    const typeMap: Record<string, string> = {
+      food: "restaurant",
+      outdoors: "park",
+      culture: "museum",
+      water: "tourist_attraction",
+      hospital: "hospital",
+      police: "police",
+      safe_area: "tourist_attraction",
+      custom: "tourist_attraction",
+    };
+
+    const typeParam = typeMap[origin.type] || "tourist_attraction";
+    const radiusMeters = 3000;
+    const baseUrl = pageToken
+      ? `https://maps.googleapis.com/maps/api/place/nearbysearch/json?pagetoken=${pageToken}&key=${googlePlacesKey}`
+      : `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${origin.location.latitude},${origin.location.longitude}&radius=${radiusMeters}&type=${typeParam}&key=${googlePlacesKey}`;
+
+    if (pageToken) {
+      setExploreMoreLoading(true);
+    } else {
+      setExploreLoading(true);
+    }
+
+    try {
+      const doFetch = async () => {
+        const resp = await fetch(baseUrl);
+        return resp.json();
+      };
+
+      let data = await doFetch();
+
+      // Google may return INVALID_REQUEST until the page token becomes active; wait then retry once
+      if (pageToken && data?.status === "INVALID_REQUEST") {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        data = await doFetch();
+      }
+
+      if (data.status === "OK" && Array.isArray(data.results)) {
+        const mapped: PlaceSuggestion[] = data.results
+          .map((p: any) => ({
+            name: p.name,
+            latitude: p.geometry?.location?.lat,
+            longitude: p.geometry?.location?.lng,
+            address: p.vicinity || p.formatted_address,
+            type: origin.type,
+            placeId: p.place_id,
+            id: p.place_id || `${p.name}-${p.geometry?.location?.lat}-${p.geometry?.location?.lng}`,
+          }))
+          .filter((p) => typeof p.latitude === "number" && typeof p.longitude === "number");
+
+        setExploreResults((prev) => {
+          const nextList = pageToken ? mergePlaces(prev, mapped) : mapped;
+          setNearbyPlacesForDestination(origin.id, nextList as NearbyPlace[]);
+          return nextList;
+        });
+        setExploreNextPageToken(data.next_page_token || null);
+      } else if (!pageToken && fallback.length > 0) {
+        setExploreResults(() => {
+          setNearbyPlacesForDestination(origin.id, fallback as NearbyPlace[]);
+          return fallback;
+        });
+        setExploreNextPageToken(null);
+      }
+    } catch (e) {
+      if (!pageToken && fallback.length > 0) {
+        setExploreResults(() => {
+          setNearbyPlacesForDestination(origin.id, fallback as NearbyPlace[]);
+          return fallback;
+        });
+        setExploreNextPageToken(null);
+      }
+    } finally {
+      if (pageToken) {
+        setExploreMoreLoading(false);
+      } else {
+        setExploreLoading(false);
+      }
+    }
+  };
+
   const handleExploreNearby = async (item: TripDestination) => {
-    setExploreLoading(true);
-    setExploreResults([]);
+    const cached = tripNearbyCache[item.id] || [];
+    setExploreResults(cached);
     setExploreAdded([]);
     setExploreOrigin(item);
     setExploreTitle(`Nearby ${item.type.replace("_", " ")}`);
+    setExploreNextPageToken(null);
     setShowExploreModal(true);
 
-    const fallback = sriLankaPlaces
+    const fallback: PlaceSuggestion[] = sriLankaPlaces
       .filter((p) => p.type === item.type && p.name !== item.name)
-      .slice(0, 5);
+      .map((p) => ({
+        name: p.name,
+        latitude: p.latitude,
+        longitude: p.longitude,
+        address: p.address,
+        type: p.type,
+        id: `${p.name}-${p.latitude}-${p.longitude}`,
+      }));
 
     if (!googlePlacesKey) {
-      setExploreResults(fallback);
+      setExploreResults((prev) => (prev.length ? prev : fallback));
+      if (!cached.length) {
+        setNearbyPlacesForDestination(item.id, fallback as NearbyPlace[]);
+      }
       setExploreLoading(false);
       return;
     }
 
-    try {
-      const typeMap: Record<string, string> = {
-        food: "restaurant",
-        outdoors: "park",
-        culture: "museum",
-        water: "tourist_attraction",
-        hospital: "hospital",
-        police: "police",
-        safe_area: "tourist_attraction",
-        custom: "tourist_attraction",
-      };
-
-      const typeParam = typeMap[item.type] || "tourist_attraction";
-      const radiusMeters = 3000;
-      const resp = await fetch(
-        `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${item.location.latitude},${item.location.longitude}&radius=${radiusMeters}&type=${typeParam}&key=${googlePlacesKey}`
-      );
-      const data = await resp.json();
-
-      if (data.status === "OK" && Array.isArray(data.results)) {
-        const mapped = data.results.slice(0, 8).map((p: any) => ({
-          name: p.name,
-          latitude: p.geometry?.location?.lat,
-          longitude: p.geometry?.location?.lng,
-          address: p.vicinity || p.formatted_address,
-          type: item.type,
-        }));
-        setExploreResults(mapped);
-      } else {
-        setExploreResults(fallback);
-      }
-    } catch (e) {
-      setExploreResults(fallback);
-    } finally {
-      setExploreLoading(false);
-    }
+    await fetchNearbyPlaces(item, undefined, cached.length ? cached : fallback);
   };
 
   const handleDeleteDestination = (id: string) => {
@@ -376,19 +517,31 @@ export default function TripScreen() {
         {
           text: "Delete",
           style: "destructive",
-          onPress: () =>
-            setDestinations((prev) => prev.filter((d) => d.id !== id)),
+          onPress: () => {
+            removeTripDestination(id);
+            const newLength = useAppStore.getState().tripDestinations.length;
+            const pages = Math.max(1, Math.ceil(Math.max(0, newLength) / pageSize));
+            setCurrentPage((prev) => Math.min(prev, pages));
+          },
         },
       ]
     );
   };
 
-  const matchingPlaces =
-    searchQuery.trim().length === 0
+  const normalizedQuery = searchQuery.replace(/\s+/g, " ").trim();
+
+  const matchingPlaces: PlaceSuggestion[] =
+    normalizedQuery.length === 0
       ? []
       : sriLankaPlaces.filter((place) =>
-          place.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
+          place.name.toLowerCase().includes(normalizedQuery.toLowerCase())
         );
+  const suggestionPlaces: PlaceSuggestion[] =
+    googlePlacesKey && searchResults.length > 0
+      ? searchResults
+      : matchingPlaces.slice(0, 8);
+
+  const destinations = tripDestinations;
 
   const typeFilters = Array.from(new Set(destinations.map((d) => d.type)));
   const filteredDestinations =
@@ -409,6 +562,87 @@ export default function TripScreen() {
       setCurrentPage(totalPages);
     }
   }, [totalPages, currentPage]);
+
+  // Fetch dynamic search suggestions from Google Places (autocomplete) with text-search fallback
+  useEffect(() => {
+    if (!googlePlacesKey) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+    const query = normalizedQuery;
+    if (query.length < 2) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setSearchLoading(true);
+    setSearchError(null);
+
+    (async () => {
+      try {
+        // Autocomplete (no type restriction so hospitals/POIs are returned)
+        const autoResp = await fetch(
+          `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
+            query
+          )}&key=${googlePlacesKey}&sessiontoken=${getPlacesSessionToken()}`,
+          { signal: controller.signal }
+        );
+        const autoData = await autoResp.json();
+
+        let mapped: PlaceSuggestion[] = [];
+        if (autoData.status === "OK" && Array.isArray(autoData.predictions)) {
+          mapped = autoData.predictions.slice(0, 8).map((p: any) => ({
+            name: p.structured_formatting?.main_text || p.description,
+            address: p.description,
+            type: "custom",
+            placeId: p.place_id,
+            id: p.place_id || `${p.description}`,
+          }));
+        }
+
+        // Fallback: text search to catch queries like "negombo hospital" if autocomplete is empty
+        if (mapped.length === 0) {
+          const textResp = await fetch(
+            `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
+              query
+            )}&key=${googlePlacesKey}`,
+            { signal: controller.signal }
+          );
+          const textData = await textResp.json();
+          if (textData.status === "OK" && Array.isArray(textData.results)) {
+            mapped = textData.results.slice(0, 8).map((p: any) => ({
+              name: p.name,
+              latitude: p.geometry?.location?.lat,
+              longitude: p.geometry?.location?.lng,
+              address: p.formatted_address,
+              type: "custom",
+              placeId: p.place_id,
+              id: p.place_id || `${p.name}-${p.geometry?.location?.lat}-${p.geometry?.location?.lng}`,
+            }));
+          }
+        }
+
+        setSearchResults(mapped);
+        if (mapped.length === 0 && autoData.status !== "OK") {
+          setSearchError(autoData.status || "No results");
+        } else if (mapped.length === 0) {
+          setSearchError("No results");
+        }
+      } catch (err: any) {
+        if (err.name !== "AbortError") {
+          setSearchError("Unable to load places");
+          setSearchResults([]);
+        }
+      } finally {
+        setSearchLoading(false);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [searchQuery, googlePlacesKey]);
 
   const SwipeableCard = ({
     children,
@@ -620,50 +854,56 @@ export default function TripScreen() {
                 </Pressable>
                 {showSuggestions && searchQuery.trim().length > 0 && (
                   <View className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg mt-2 max-h-64">
-                    {matchingPlaces.length > 0 ? (
-                      <FlatList
-                        data={matchingPlaces.slice(0, 8)}
-                        keyExtractor={(item) => item.name}
-                        renderItem={({ item }) => (
-                          <Pressable
-                            onPress={() => handleSelectPlace(item)}
-                            className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 last:border-b-0 active:bg-gray-50 dark:active:bg-gray-700"
-                          >
-                            <View className="flex-row items-center justify-between">
-                              <View className="flex-1 pr-3">
-                                <Text className="text-base font-medium text-gray-900 dark:text-white">
-                                  {item.name}
+                    {searchLoading ? (
+                      <View className="px-4 py-3">
+                        <Text className="text-sm font-medium text-gray-900 dark:text-white">
+                          Searching...
+                        </Text>
+                        <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Fetching places from Google Maps
+                        </Text>
+                      </View>
+                    ) : suggestionPlaces.length > 0 ? (
+                      suggestionPlaces.map((item) => (
+                        <Pressable
+                          key={item.name}
+                          onPress={() => handleSelectPlace(item)}
+                          className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 last:border-b-0 active:bg-gray-50 dark:active:bg-gray-700"
+                        >
+                          <View className="flex-row items-center justify-between">
+                            <View className="flex-1 pr-3">
+                              <Text className="text-base font-medium text-gray-900 dark:text-white">
+                                {item.name}
+                              </Text>
+                              {item.address && (
+                                <Text className="text-sm text-gray-500 dark:text-gray-400">
+                                  {item.address}
                                 </Text>
-                                {item.address && (
-                                  <Text className="text-sm text-gray-500 dark:text-gray-400">
-                                    {item.address}
-                                  </Text>
-                                )}
-                              </View>
-                              {item.type && (
-                                <View
-                                  className="px-2 py-1 rounded-full"
-                                  style={{ backgroundColor: getDestinationColor(item.type) + "33" }}
-                                >
-                                  <Text
-                                    className="text-xs font-semibold capitalize"
-                                    style={{ color: getDestinationColor(item.type) }}
-                                  >
-                                    {item.type}
-                                  </Text>
-                                </View>
                               )}
                             </View>
-                          </Pressable>
-                        )}
-                      />
+                            {item.type && (
+                              <View
+                                className="px-2 py-1 rounded-full"
+                                style={{ backgroundColor: getDestinationColor(item.type) + "33" }}
+                              >
+                                <Text
+                                  className="text-xs font-semibold capitalize"
+                                  style={{ color: getDestinationColor(item.type) }}
+                                >
+                                  {item.type}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                        </Pressable>
+                      ))
                     ) : (
                       <View className="px-4 py-3">
                         <Text className="text-sm font-medium text-gray-900 dark:text-white">
                           No matches
                         </Text>
                         <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          Try a different name.
+                          {searchError || "Try a different name."}
                         </Text>
                       </View>
                     )}
@@ -761,12 +1001,9 @@ export default function TripScreen() {
               </View>
             ) : (
               <>
-                <FlatList
-                  data={pagedDestinations}
-                  renderItem={renderDestinationItem}
-                  keyExtractor={(item) => item.id}
-                  scrollEnabled={false}
-                />
+                {pagedDestinations.map((item) => (
+                  <View key={item.id}>{renderDestinationItem({ item })}</View>
+                ))}
 
                 {totalPages > 1 && (
                   <View className="flex-row items-center justify-between mt-3">
@@ -961,7 +1198,24 @@ export default function TripScreen() {
             ) : (
               <FlatList
                 data={exploreResults}
-                keyExtractor={(item) => item.name}
+                keyExtractor={(item) => item.placeId || item.name}
+                onEndReached={() => {
+                  if (
+                    !exploreMoreLoading &&
+                    exploreNextPageToken &&
+                    exploreOrigin
+                  ) {
+                    fetchNearbyPlaces(exploreOrigin, exploreNextPageToken);
+                  }
+                }}
+                onEndReachedThreshold={0.2}
+                ListFooterComponent={
+                  exploreMoreLoading ? (
+                    <Text className="text-xs text-gray-500 dark:text-gray-400 py-2">
+                      Loading more nearby places...
+                    </Text>
+                  ) : null
+                }
                 renderItem={({ item }) => {
                   const distance =
                     exploreOrigin &&
@@ -1046,7 +1300,7 @@ export default function TripScreen() {
             </View>
 
             <MapView
-              provider={PROVIDER_GOOGLE}
+              provider={supportsGoogleMapsProvider ? PROVIDER_GOOGLE : undefined}
               style={{ flex: 1 }}
               googleMapsApiKey={googlePlacesKey || undefined}
               initialRegion={{
@@ -1068,6 +1322,15 @@ export default function TripScreen() {
               <Text className="text-sm text-gray-600 dark:text-gray-300 mb-1">
                 Tap on the map to drop a pin, then name it.
               </Text>
+                          <View className="px-4 py-2 bg-blue-50">
+              <Text className="text-xs">
+                Provider: {supportsGoogleMapsProvider ? 'Google Maps' : 'Default Map'}
+              </Text>
+              <Text className="text-xs">
+                API Key: {googlePlacesKey ? '✓ Set' : '✗ Missing'}
+              </Text>
+            </View>
+
               <View className="flex-row items-center bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3">
                 <Ionicons name="pricetag" size={18} color="#6b7280" />
                 <TextInput

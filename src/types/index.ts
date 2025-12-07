@@ -78,6 +78,17 @@ export interface TripDestination {
   isPreloaded: boolean;
 }
 
+// Cached nearby place
+export interface NearbyPlace {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  address?: string;
+  type: TripDestination["type"];
+  placeId?: string;
+}
+
 // App settings types
 export interface AppSettings {
   inactivityThreshold: number; // minutes
@@ -109,4 +120,6 @@ export interface AppState {
   monitoringLogs: MonitoringLog[];
   isEmergencyMode: boolean;
   userProfile: UserProfile;
+  tripDestinations: TripDestination[];
+  tripNearbyCache: Record<string, NearbyPlace[]>;
 }

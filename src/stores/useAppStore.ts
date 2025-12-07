@@ -1,15 +1,17 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { 
-  AppState, 
-  LocationData, 
-  BatteryStatus, 
-  EmergencyContact, 
-  AppSettings, 
+import {
+  AppState,
+  LocationData,
+  BatteryStatus,
+  EmergencyContact,
+  AppSettings,
   MonitoringLog,
   SOSAlert,
-  UserProfile 
+  UserProfile,
+  TripDestination,
+  NearbyPlace,
 } from '../types';
 
 interface AppStore extends AppState {
@@ -25,6 +27,10 @@ interface AppStore extends AppState {
   setEmergencyMode: (isEmergency: boolean) => void;
   clearLogs: () => void;
   updateUserProfile: (profile: Partial<UserProfile>) => void;
+  addTripDestination: (destination: TripDestination) => void;
+  removeTripDestination: (id: string) => void;
+  clearTripDestinations: () => void;
+  setNearbyPlacesForDestination: (destinationId: string, places: NearbyPlace[]) => void;
 }
 
 const defaultSettings: AppSettings = {
@@ -57,6 +63,8 @@ export const useAppStore = create<AppStore>()(
       monitoringLogs: [],
       isEmergencyMode: false,
       userProfile: defaultProfile,
+      tripDestinations: [],
+      tripNearbyCache: {},
 
       // Actions
       setMonitoring: (isMonitoring) => set({ isMonitoring }),
@@ -94,6 +102,21 @@ export const useAppStore = create<AppStore>()(
       updateUserProfile: (profile) => set((state) => ({
         userProfile: { ...state.userProfile, ...profile }
       })),
+
+      addTripDestination: (destination) => set((state) => ({
+        tripDestinations: [...state.tripDestinations, destination],
+      })),
+
+      removeTripDestination: (id) => set((state) => ({
+        tripDestinations: state.tripDestinations.filter((d) => d.id !== id),
+      })),
+
+      clearTripDestinations: () => set({ tripDestinations: [] }),
+
+      setNearbyPlacesForDestination: (destinationId, places) =>
+        set((state) => ({
+          tripNearbyCache: { ...state.tripNearbyCache, [destinationId]: places },
+        })),
     }),
     {
       name: 'safeguard-storage',
@@ -103,6 +126,8 @@ export const useAppStore = create<AppStore>()(
         settings: state.settings,
         monitoringLogs: state.monitoringLogs,
         userProfile: state.userProfile,
+        tripDestinations: state.tripDestinations,
+        tripNearbyCache: state.tripNearbyCache,
       }),
     }
   )
