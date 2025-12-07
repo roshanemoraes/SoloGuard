@@ -16,21 +16,24 @@ import {
 } from "react-native";
 import MapView, { Marker, MapPressEvent, PROVIDER_GOOGLE } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
-import { TripDestination } from "../src/types";
-import { useI18n } from "../src/stores/useI18n";
-
-type TripType = TripDestination["type"];
-type BasePlace = {
-  name: string;
-  latitude: number;
-  longitude: number;
-  address?: string;
-  type?: TripType;
-  placeId?: string;
-};
+import Constants from "expo-constants";
+import { TripDestination, NearbyPlace } from "../src/types";
+import { useAppStore } from "../src/stores/useAppStore";
 
 export default function TripScreen() {
-  const [destinations, setDestinations] = useState<TripDestination[]>([]);
+  const {
+    tripDestinations,
+    addTripDestination,
+    removeTripDestination,
+    tripNearbyCache,
+    setNearbyPlacesForDestination,
+  } = useAppStore() as unknown as {
+    tripDestinations: TripDestination[];
+    addTripDestination: (d: TripDestination) => void;
+    removeTripDestination: (id: string) => void;
+    tripNearbyCache: Record<string, NearbyPlace[]>;
+    setNearbyPlacesForDestination: (destinationId: string, places: NearbyPlace[]) => void;
+  };
   const [searchQuery, setSearchQuery] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -46,20 +49,40 @@ export default function TripScreen() {
   } | null>(null);
   const [mapPlaceName, setMapPlaceName] = useState("");
   const [showExploreModal, setShowExploreModal] = useState(false);
-  const [exploreResults, setExploreResults] = useState<BasePlace[]>([]);
+  const [exploreResults, setExploreResults] = useState<PlaceSuggestion[]>([]);
   const [exploreTitle, setExploreTitle] = useState("");
   const [exploreOrigin, setExploreOrigin] = useState<TripDestination | null>(
     null
   );
   const [exploreAdded, setExploreAdded] = useState<string[]>([]);
   const [exploreLoading, setExploreLoading] = useState(false);
+  const [exploreMoreLoading, setExploreMoreLoading] = useState(false);
+  const [exploreNextPageToken, setExploreNextPageToken] = useState<string | null>(
+    null
+  );
   const googlePlacesKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY || "";
-  const [suggestions, setSuggestions] = useState<BasePlace[]>([]);
-  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<TripDestination | null>(null);
-  const { t } = useI18n();
+  type PlaceSuggestion = NearbyPlace;
+  const [searchResults, setSearchResults] = useState<PlaceSuggestion[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [selectingPlaceId, setSelectingPlaceId] = useState<string | null>(null);
+  const placesSessionTokenRef = React.useRef<string | null>(null);
+  const supportsGoogleMapsProvider = Constants.appOwnership !== "expo"; // Expo Go lacks Google Maps SDK
 
-  const fallbackPlaces: BasePlace[] = [
+  const getPlacesSessionToken = () => {
+    if (!placesSessionTokenRef.current) {
+      placesSessionTokenRef.current = Math.random().toString(36).slice(2);
+    }
+    return placesSessionTokenRef.current;
+  };
+
+  const sriLankaPlaces: {
+    name: string;
+    latitude: number;
+    longitude: number;
+    address?: string;
+    type?: TripDestination["type"];
+  }[] = [
     // Outdoors
     {
       name: "Horton Plains National Park",
@@ -253,7 +276,11 @@ export default function TripScreen() {
     }
   };
 
-  const addPlaceToTrip = (place: BasePlace) => {
+  const addPlaceToTrip = (place: PlaceSuggestion) => {
+    if (typeof place.latitude !== "number" || typeof place.longitude !== "number") {
+      Alert.alert("Missing location", "Couldn't find coordinates for this place.");
+      return;
+    }
     const destination: TripDestination = {
       id: `${Date.now()}-${Math.random()}`,
       name: place.name,
@@ -267,18 +294,62 @@ export default function TripScreen() {
       isPreloaded: false,
     };
 
-    setDestinations((prev) => {
-      const updated = [...prev, destination];
-      setCurrentPage(Math.max(1, Math.ceil(updated.length / pageSize)));
-      return updated;
-    });
+    const prevLen = useAppStore.getState().tripDestinations.length;
+    addTripDestination(destination);
+    const updatedLength = prevLen + 1;
+    setCurrentPage(Math.max(1, Math.ceil(updatedLength / pageSize)));
   };
 
-  const handleSelectPlace = (place: BasePlace) => {
-    addPlaceToTrip(place);
-    setSearchQuery("");
-    setShowSuggestions(false);
-    setSuggestions([]);
+  const mergePlaces = (
+    existing: PlaceSuggestion[],
+    incoming: PlaceSuggestion[]
+  ): PlaceSuggestion[] => {
+    const seen = new Set(
+      existing.map(
+        (p) =>
+          p.placeId ||
+          `${p.name}-${p.latitude ?? "x"}-${p.longitude ?? "x"}`
+      )
+    );
+    const uniqueIncoming = incoming.filter((p) => {
+      const key = p.placeId || `${p.name}-${p.latitude ?? "x"}-${p.longitude ?? "x"}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return [...existing, ...uniqueIncoming];
+  };
+
+  const handleSelectPlace = async (place: PlaceSuggestion) => {
+    try {
+      if (place.placeId && (!place.latitude || !place.longitude) && googlePlacesKey) {
+        setSelectingPlaceId(place.placeId);
+        const detailsResp = await fetch(
+          `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.placeId}&fields=name,geometry,formatted_address&key=${googlePlacesKey}`
+        );
+        const detailsData = await detailsResp.json();
+        const loc = detailsData.result?.geometry?.location;
+        if (loc?.lat && loc?.lng) {
+          addPlaceToTrip({
+            ...place,
+            latitude: loc.lat,
+            longitude: loc.lng,
+            address: detailsData.result?.formatted_address || place.address,
+          });
+        } else {
+          Alert.alert("Couldn't load place", "Try selecting again or type a different name.");
+        }
+      } else {
+        addPlaceToTrip(place);
+      }
+    } catch (e) {
+      Alert.alert("Couldn't add place", "Please try again.");
+    } finally {
+      setSelectingPlaceId(null);
+      setSearchQuery("");
+      setShowSuggestions(false);
+      placesSessionTokenRef.current = null; // new session for next query
+    }
   };
 
   const handleAddFromMap = () => {
@@ -287,13 +358,22 @@ export default function TripScreen() {
       return;
     }
 
-    addPlaceToTrip({
+    const destination: TripDestination = {
+      id: `${Date.now()}-${Math.random()}`,
       name: mapPlaceName.trim(),
-      latitude: mapSelected.latitude,
-      longitude: mapSelected.longitude,
-      address: "",
+      location: {
+        latitude: mapSelected.latitude,
+        longitude: mapSelected.longitude,
+        timestamp: Date.now(),
+      },
       type: "custom",
-    });
+      isPreloaded: false,
+    };
+
+    const prevLen = useAppStore.getState().tripDestinations.length;
+    addTripDestination(destination);
+    const updatedLength = prevLen + 1;
+    setCurrentPage(Math.max(1, Math.ceil(updatedLength / pageSize)));
 
     setMapSelected(null);
     setMapPlaceName("");
@@ -311,141 +391,157 @@ export default function TripScreen() {
     );
   };
 
-  const handleDeleteDestination = (item: TripDestination) => {
-    setDeleteTarget(item);
-  };
-
-  const confirmDelete = () => {
-    if (!deleteTarget) return;
-    setDestinations((prev) => prev.filter((d) => d.id !== deleteTarget.id));
-    setDeleteTarget(null);
-  };
-
-  const cancelDelete = () => setDeleteTarget(null);
-
-  const handleExploreNearby = async (item: TripDestination) => {
-    setExploreLoading(true);
-    setExploreResults([]);
-    setExploreAdded([]);
-    setExploreOrigin(item);
-    setExploreTitle(`Nearby ${item.type.replace("_", " ")}`);
-    setShowExploreModal(true);
-
-    const originLat = item.location.latitude;
-    const originLng = item.location.longitude;
-
-    const sortByDistance = (places: BasePlace[]) =>
-      places
-        .filter((p) => p.latitude && p.longitude)
-        .sort(
-          (a, b) =>
-            calculateDistanceKm(originLat, originLng, a.latitude, a.longitude) -
-            calculateDistanceKm(originLat, originLng, b.latitude, b.longitude)
-        );
-
-    const isSamePlace = (p: BasePlace) => {
-      const sameName =
-        p.name?.toLowerCase().trim() === item.name.toLowerCase().trim();
-      const dist =
-        p.latitude && p.longitude
-          ? calculateDistanceKm(originLat, originLng, p.latitude, p.longitude)
-          : Infinity;
-      return sameName || dist < 0.05; // ~50m radius considered same place
+  const fetchNearbyPlaces = async (
+    origin: TripDestination,
+    pageToken?: string,
+    fallback: PlaceSuggestion[] = []
+  ) => {
+    const typeMap: Record<string, string> = {
+      food: "restaurant",
+      outdoors: "park",
+      culture: "museum",
+      water: "tourist_attraction",
+      hospital: "hospital",
+      police: "police",
+      safe_area: "tourist_attraction",
+      custom: "tourist_attraction",
     };
 
-    const fallback = sortByDistance(
-      fallbackPlaces.filter((p) => p.type === item.type && !isSamePlace(p))
-    ).slice(0, 5);
+    const typeParam = typeMap[origin.type] || "tourist_attraction";
+    const radiusMeters = 3000;
+    const baseUrl = pageToken
+      ? `https://maps.googleapis.com/maps/api/place/nearbysearch/json?pagetoken=${pageToken}&key=${googlePlacesKey}`
+      : `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${origin.location.latitude},${origin.location.longitude}&radius=${radiusMeters}&type=${typeParam}&key=${googlePlacesKey}`;
 
-    if (!googlePlacesKey) {
-      setExploreResults(fallback);
-      setExploreLoading(false);
-      return;
+    if (pageToken) {
+      setExploreMoreLoading(true);
+    } else {
+      setExploreLoading(true);
     }
 
     try {
-      const typeMap: Record<string, string> = {
-        food: "restaurant",
-        outdoors: "park",
-        culture: "museum",
-        water: "tourist_attraction",
-        hospital: "hospital",
-        police: "police",
-        safe_area: "tourist_attraction",
-        custom: "tourist_attraction",
+      const doFetch = async () => {
+        const resp = await fetch(baseUrl);
+        return resp.json();
       };
 
-      const typeParam = typeMap[item.type] || "tourist_attraction";
-      const radiusMeters = 3000;
-      const resp = await fetch(
-        `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${item.location.latitude},${item.location.longitude}&radius=${radiusMeters}&type=${typeParam}&key=${googlePlacesKey}`
-      );
-      const data = await resp.json();
+      let data = await doFetch();
 
-      if (data.status === "OK" && Array.isArray(data.results)) {
-        const mapped = data.results.slice(0, 12).map((p: any) => ({
-          name: p.name,
-          latitude: p.geometry?.location?.lat,
-          longitude: p.geometry?.location?.lng,
-          address: p.vicinity || p.formatted_address,
-          type: item.type,
-        })) as BasePlace[];
-        setExploreResults(
-          sortByDistance(mapped.filter((p) => !isSamePlace(p))).slice(0, 8)
-        );
-      } else {
-        setExploreResults(fallback);
+      // Google may return INVALID_REQUEST until the page token becomes active; wait then retry once
+      if (pageToken && data?.status === "INVALID_REQUEST") {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        data = await doFetch();
       }
-    } catch (e) {
-      setExploreResults(fallback);
-    } finally {
-      setExploreLoading(false);
-    }
-  };
 
-  const fetchAutocomplete = async (input: string) => {
-    if (!googlePlacesKey) return;
-    if (!input.trim()) {
-      setSuggestions([]);
-      return;
-    }
-    setSuggestionsLoading(true);
-    try {
-      const resp = await fetch(
-        `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
-          input
-        )}&region=lk&key=${googlePlacesKey}`
-      );
-      const data = await resp.json();
       if (data.status === "OK" && Array.isArray(data.results)) {
-        const mapped: BasePlace[] = data.results.slice(0, 10).map((p: any) => {
-          const types: string[] = p.types || [];
-          return {
+        const mapped: PlaceSuggestion[] = data.results
+          .map((p: any) => ({
             name: p.name,
             latitude: p.geometry?.location?.lat,
             longitude: p.geometry?.location?.lng,
-            address: p.formatted_address || p.vicinity,
-            type: mapGoogleTypesToTripType(types),
+            address: p.vicinity || p.formatted_address,
+            type: origin.type,
             placeId: p.place_id,
-          };
+            id: p.place_id || `${p.name}-${p.geometry?.location?.lat}-${p.geometry?.location?.lng}`,
+          }))
+          .filter((p) => typeof p.latitude === "number" && typeof p.longitude === "number");
+
+        setExploreResults((prev) => {
+          const nextList = pageToken ? mergePlaces(prev, mapped) : mapped;
+          setNearbyPlacesForDestination(origin.id, nextList as NearbyPlace[]);
+          return nextList;
         });
-        setSuggestions(mapped.filter((p) => p.latitude && p.longitude));
-      } else {
-        setSuggestions([]);
+        setExploreNextPageToken(data.next_page_token || null);
+      } else if (!pageToken && fallback.length > 0) {
+        setExploreResults(() => {
+          setNearbyPlacesForDestination(origin.id, fallback as NearbyPlace[]);
+          return fallback;
+        });
+        setExploreNextPageToken(null);
       }
     } catch (e) {
-      setSuggestions([]);
+      if (!pageToken && fallback.length > 0) {
+        setExploreResults(() => {
+          setNearbyPlacesForDestination(origin.id, fallback as NearbyPlace[]);
+          return fallback;
+        });
+        setExploreNextPageToken(null);
+      }
     } finally {
-      setSuggestionsLoading(false);
+      if (pageToken) {
+        setExploreMoreLoading(false);
+      } else {
+        setExploreLoading(false);
+      }
     }
   };
 
-  const matchingPlaces =
-    searchQuery.trim().length === 0 || googlePlacesKey
+  const handleExploreNearby = async (item: TripDestination) => {
+    const cached = tripNearbyCache[item.id] || [];
+    setExploreResults(cached);
+    setExploreAdded([]);
+    setExploreOrigin(item);
+    setExploreTitle(`Nearby ${item.type.replace("_", " ")}`);
+    setExploreNextPageToken(null);
+    setShowExploreModal(true);
+
+    const fallback: PlaceSuggestion[] = sriLankaPlaces
+      .filter((p) => p.type === item.type && p.name !== item.name)
+      .map((p) => ({
+        name: p.name,
+        latitude: p.latitude,
+        longitude: p.longitude,
+        address: p.address,
+        type: p.type,
+        id: `${p.name}-${p.latitude}-${p.longitude}`,
+      }));
+
+    if (!googlePlacesKey) {
+      setExploreResults((prev) => (prev.length ? prev : fallback));
+      if (!cached.length) {
+        setNearbyPlacesForDestination(item.id, fallback as NearbyPlace[]);
+      }
+      setExploreLoading(false);
+      return;
+    }
+
+    await fetchNearbyPlaces(item, undefined, cached.length ? cached : fallback);
+  };
+
+  const handleDeleteDestination = (id: string) => {
+    Alert.alert(
+      "Delete Destination",
+      "Are you sure you want to delete this destination?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            removeTripDestination(id);
+            const newLength = useAppStore.getState().tripDestinations.length;
+            const pages = Math.max(1, Math.ceil(Math.max(0, newLength) / pageSize));
+            setCurrentPage((prev) => Math.min(prev, pages));
+          },
+        },
+      ]
+    );
+  };
+
+  const normalizedQuery = searchQuery.replace(/\s+/g, " ").trim();
+
+  const matchingPlaces: PlaceSuggestion[] =
+    normalizedQuery.length === 0
       ? []
-      : fallbackPlaces.filter((place) =>
-          place.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
+      : sriLankaPlaces.filter((place) =>
+          place.name.toLowerCase().includes(normalizedQuery.toLowerCase())
         );
+  const suggestionPlaces: PlaceSuggestion[] =
+    googlePlacesKey && searchResults.length > 0
+      ? searchResults
+      : matchingPlaces.slice(0, 8);
+
+  const destinations = tripDestinations;
 
   const typeFilters = Array.from(new Set(destinations.map((d) => d.type)));
   const filteredDestinations =
@@ -466,6 +562,87 @@ export default function TripScreen() {
       setCurrentPage(totalPages);
     }
   }, [totalPages, currentPage]);
+
+  // Fetch dynamic search suggestions from Google Places (autocomplete) with text-search fallback
+  useEffect(() => {
+    if (!googlePlacesKey) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+    const query = normalizedQuery;
+    if (query.length < 2) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setSearchLoading(true);
+    setSearchError(null);
+
+    (async () => {
+      try {
+        // Autocomplete (no type restriction so hospitals/POIs are returned)
+        const autoResp = await fetch(
+          `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
+            query
+          )}&key=${googlePlacesKey}&sessiontoken=${getPlacesSessionToken()}`,
+          { signal: controller.signal }
+        );
+        const autoData = await autoResp.json();
+
+        let mapped: PlaceSuggestion[] = [];
+        if (autoData.status === "OK" && Array.isArray(autoData.predictions)) {
+          mapped = autoData.predictions.slice(0, 8).map((p: any) => ({
+            name: p.structured_formatting?.main_text || p.description,
+            address: p.description,
+            type: "custom",
+            placeId: p.place_id,
+            id: p.place_id || `${p.description}`,
+          }));
+        }
+
+        // Fallback: text search to catch queries like "negombo hospital" if autocomplete is empty
+        if (mapped.length === 0) {
+          const textResp = await fetch(
+            `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
+              query
+            )}&key=${googlePlacesKey}`,
+            { signal: controller.signal }
+          );
+          const textData = await textResp.json();
+          if (textData.status === "OK" && Array.isArray(textData.results)) {
+            mapped = textData.results.slice(0, 8).map((p: any) => ({
+              name: p.name,
+              latitude: p.geometry?.location?.lat,
+              longitude: p.geometry?.location?.lng,
+              address: p.formatted_address,
+              type: "custom",
+              placeId: p.place_id,
+              id: p.place_id || `${p.name}-${p.geometry?.location?.lat}-${p.geometry?.location?.lng}`,
+            }));
+          }
+        }
+
+        setSearchResults(mapped);
+        if (mapped.length === 0 && autoData.status !== "OK") {
+          setSearchError(autoData.status || "No results");
+        } else if (mapped.length === 0) {
+          setSearchError("No results");
+        }
+      } catch (err: any) {
+        if (err.name !== "AbortError") {
+          setSearchError("Unable to load places");
+          setSearchResults([]);
+        }
+      } finally {
+        setSearchLoading(false);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [searchQuery, googlePlacesKey]);
 
   const SwipeableCard = ({
     children,
@@ -547,7 +724,7 @@ export default function TripScreen() {
   const renderDestinationItem = ({ item }: { item: TripDestination }) => (
     <SwipeableCard
       enabled={!item.isPreloaded}
-      onDelete={() => handleDeleteDestination(item)}
+      onDelete={() => handleDeleteDestination(item.id)}
     >
       <View className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
         <View className="flex-row items-start space-x-3">
@@ -622,12 +799,12 @@ export default function TripScreen() {
         <View className="p-4 flex-1">
           {/* Add Destination Section */}
           <View className="mb-6">
-            <View className="mb-3">
+            <View className="items-center mb-4">
               <Text className="text-2xl font-bold text-gray-900 dark:text-white">
-                {t("whereTo")}
+                Where to?
               </Text>
               <Text className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                {t("subtitle")}
+                Places to go, things to do, hotels...
               </Text>
             </View>
 
@@ -649,14 +826,9 @@ export default function TripScreen() {
                     onChangeText={(text) => {
                       setSearchQuery(text);
                       setShowSuggestions(text.trim().length > 0);
-                      if (googlePlacesKey && text.trim().length > 1) {
-                        fetchAutocomplete(text);
-                      } else {
-                        setSuggestions([]);
-                      }
                     }}
                     onFocus={() => setShowSuggestions(searchQuery.trim().length > 0)}
-                    placeholder={t("searchPlaceholder")}
+                    placeholder="Places to go, things to do, hotels..."
                     className="flex-1 py-3 text-gray-900 dark:text-white"
                   />
                   {searchQuery.length > 0 && (
@@ -677,93 +849,61 @@ export default function TripScreen() {
                 >
                   <Ionicons name="map" size={18} color="#16a34a" />
                   <Text className="ml-2 text-sm font-semibold text-green-700 dark:text-green-200">
-                    {t("pickOnMap")}
+                    Pick on Google Maps
                   </Text>
                 </Pressable>
                 {showSuggestions && searchQuery.trim().length > 0 && (
                   <View className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg mt-2 max-h-64">
-                    {googlePlacesKey ? (
-                      suggestionsLoading ? (
-                        <View className="px-4 py-3">
-                          <Text className="text-sm text-gray-600 dark:text-gray-300">
-                            Loading...
-                          </Text>
-                        </View>
-                      ) : suggestions.length > 0 ? (
-                        <FlatList
-                          data={suggestions.slice(0, 8)}
-                          keyExtractor={(item) => item.placeId || item.name}
-                          scrollEnabled={false}
-                          renderItem={({ item }) => (
-                            <Pressable
-                              onPress={() => handleSelectPlace(item)}
-                              className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 last:border-b-0 active:bg-gray-50 dark:active:bg-gray-700"
-                            >
-                              <View className="flex-1">
-                                <Text className="text-base font-medium text-gray-900 dark:text-white">
-                                  {item.name}
+                    {searchLoading ? (
+                      <View className="px-4 py-3">
+                        <Text className="text-sm font-medium text-gray-900 dark:text-white">
+                          Searching...
+                        </Text>
+                        <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Fetching places from Google Maps
+                        </Text>
+                      </View>
+                    ) : suggestionPlaces.length > 0 ? (
+                      suggestionPlaces.map((item) => (
+                        <Pressable
+                          key={item.name}
+                          onPress={() => handleSelectPlace(item)}
+                          className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 last:border-b-0 active:bg-gray-50 dark:active:bg-gray-700"
+                        >
+                          <View className="flex-row items-center justify-between">
+                            <View className="flex-1 pr-3">
+                              <Text className="text-base font-medium text-gray-900 dark:text-white">
+                                {item.name}
+                              </Text>
+                              {item.address && (
+                                <Text className="text-sm text-gray-500 dark:text-gray-400">
+                                  {item.address}
                                 </Text>
-                                {item.address && (
-                                  <Text className="text-sm text-gray-500 dark:text-gray-400">
-                                    {item.address}
-                                  </Text>
-                                )}
-                              </View>
-                            </Pressable>
-                          )}
-                        />
-                      ) : (
-                        <View className="px-4 py-3">
-                          <Text className="text-sm text-gray-600 dark:text-gray-300">
-                            No matches. Try a different name.
-                          </Text>
-                        </View>
-                      )
-                    ) : matchingPlaces.length > 0 ? (
-                      <FlatList
-                        data={matchingPlaces.slice(0, 8)}
-                        keyExtractor={(item) => item.name}
-                        scrollEnabled={false}
-                        renderItem={({ item }) => (
-                          <Pressable
-                            onPress={() => handleSelectPlace(item)}
-                            className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 last:border-b-0 active:bg-gray-50 dark:active:bg-gray-700"
-                          >
-                            <View className="flex-row items-center justify-between">
-                              <View className="flex-1 pr-3">
-                                <Text className="text-base font-medium text-gray-900 dark:text-white">
-                                  {item.name}
-                                </Text>
-                                {item.address && (
-                                  <Text className="text-sm text-gray-500 dark:text-gray-400">
-                                    {item.address}
-                                  </Text>
-                                )}
-                              </View>
-                              {item.type && (
-                                <View
-                                  className="px-2 py-1 rounded-full"
-                                  style={{ backgroundColor: getDestinationColor(item.type) + "33" }}
-                                >
-                                  <Text
-                                    className="text-xs font-semibold capitalize"
-                                    style={{ color: getDestinationColor(item.type) }}
-                                  >
-                                    {item.type}
-                                  </Text>
-                                </View>
                               )}
                             </View>
-                          </Pressable>
-                        )}
-                      />
+                            {item.type && (
+                              <View
+                                className="px-2 py-1 rounded-full"
+                                style={{ backgroundColor: getDestinationColor(item.type) + "33" }}
+                              >
+                                <Text
+                                  className="text-xs font-semibold capitalize"
+                                  style={{ color: getDestinationColor(item.type) }}
+                                >
+                                  {item.type}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                        </Pressable>
+                      ))
                     ) : (
                       <View className="px-4 py-3">
                         <Text className="text-sm font-medium text-gray-900 dark:text-white">
                           No matches
                         </Text>
                         <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          Try a different name.
+                          {searchError || "Try a different name."}
                         </Text>
                       </View>
                     )}
@@ -777,7 +917,7 @@ export default function TripScreen() {
           <View className="flex-row items-center mb-4 mt-2">
             <View className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
             <Text className="mx-3 text-sm font-semibold text-gray-500 dark:text-gray-400">
-              {t("yourTripDestinations", { count: destinations.length })}
+              Your trip destinations ({destinations.length})
             </Text>
             <View className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
           </View>
@@ -853,20 +993,17 @@ export default function TripScreen() {
               <View className="bg-white dark:bg-gray-800 rounded-lg p-6 items-center">
                 <Ionicons name="map-outline" size={48} color="#9ca3af" />
                 <Text className="text-lg font-medium text-gray-900 dark:text-white mt-2 mb-1">
-                  {t("noDestinations")}
+                  No Destinations
                 </Text>
                 <Text className="text-center text-gray-500 dark:text-gray-400">
-                  {t("noDestinationsDesc")}
+                  Search above to add destinations to your trip.
                 </Text>
               </View>
             ) : (
               <>
-                <FlatList
-                  data={pagedDestinations}
-                  renderItem={renderDestinationItem}
-                  keyExtractor={(item) => item.id}
-                  scrollEnabled={false}
-                />
+                {pagedDestinations.map((item) => (
+                  <View key={item.id}>{renderDestinationItem({ item })}</View>
+                ))}
 
                 {totalPages > 1 && (
                   <View className="flex-row items-center justify-between mt-3">
@@ -914,7 +1051,7 @@ export default function TripScreen() {
                 <View className="flex-row items-center space-x-2">
                   <Ionicons name="shield-checkmark" size={18} color="#2563eb" />
                   <Text className="text-base font-semibold text-blue-900 dark:text-blue-100">
-                    {t("safetyTips")}
+                    Safety tips
                   </Text>
                 </View>
                 <Ionicons
@@ -946,7 +1083,7 @@ export default function TripScreen() {
               className="bg-red-600 active:bg-red-700 rounded-full px-4 py-3 shadow-lg flex-row items-center justify-center"
             >
               <Ionicons name="alert-circle" size={18} color="#fff" />
-              <Text className="text-white font-semibold ml-2">{t("needHelp")}</Text>
+              <Text className="text-white font-semibold ml-2">Need help?</Text>
             </Pressable>
           </View>
         </View>
@@ -1061,7 +1198,24 @@ export default function TripScreen() {
             ) : (
               <FlatList
                 data={exploreResults}
-                keyExtractor={(item) => item.name}
+                keyExtractor={(item) => item.placeId || item.name}
+                onEndReached={() => {
+                  if (
+                    !exploreMoreLoading &&
+                    exploreNextPageToken &&
+                    exploreOrigin
+                  ) {
+                    fetchNearbyPlaces(exploreOrigin, exploreNextPageToken);
+                  }
+                }}
+                onEndReachedThreshold={0.2}
+                ListFooterComponent={
+                  exploreMoreLoading ? (
+                    <Text className="text-xs text-gray-500 dark:text-gray-400 py-2">
+                      Loading more nearby places...
+                    </Text>
+                  ) : null
+                }
                 renderItem={({ item }) => {
                   const distance =
                     exploreOrigin &&
@@ -1134,21 +1288,21 @@ export default function TripScreen() {
         transparent
         onRequestClose={() => setShowMapPicker(false)}
       >
-            <View className="flex-1 bg-black/40">
-              <View className="mt-12 flex-1 bg-white dark:bg-gray-900 rounded-t-2xl overflow-hidden">
-                <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
-                  <Text className="text-lg font-bold text-gray-900 dark:text-white">
-                    {t("pickOnMapModalTitle")}
-                  </Text>
-                  <Pressable onPress={() => setShowMapPicker(false)}>
-                    <Ionicons name="close" size={22} color="#6b7280" />
-                  </Pressable>
-                </View>
+        <View className="flex-1 bg-black/40">
+          <View className="mt-12 flex-1 bg-white dark:bg-gray-900 rounded-t-2xl overflow-hidden">
+            <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
+              <Text className="text-lg font-bold text-gray-900 dark:text-white">
+                Select on Google Maps
+              </Text>
+              <Pressable onPress={() => setShowMapPicker(false)}>
+                <Ionicons name="close" size={22} color="#6b7280" />
+              </Pressable>
+            </View>
 
             <MapView
-              provider={PROVIDER_GOOGLE}
+              provider={supportsGoogleMapsProvider ? PROVIDER_GOOGLE : undefined}
               style={{ flex: 1 }}
-              // googleMapsApiKey={googlePlacesKey || undefined}
+              googleMapsApiKey={googlePlacesKey || undefined}
               initialRegion={{
                 latitude: 7.8731,
                 longitude: 80.7718,
@@ -1164,10 +1318,19 @@ export default function TripScreen() {
               )}
             </MapView>
 
-              <View className="px-4 py-3 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
-                <Text className="text-sm text-gray-600 dark:text-gray-300 mb-1">
-                  {t("mapTapHint")}
-                </Text>
+            <View className="px-4 py-3 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+              <Text className="text-sm text-gray-600 dark:text-gray-300 mb-1">
+                Tap on the map to drop a pin, then name it.
+              </Text>
+                          <View className="px-4 py-2 bg-blue-50">
+              <Text className="text-xs">
+                Provider: {supportsGoogleMapsProvider ? 'Google Maps' : 'Default Map'}
+              </Text>
+              <Text className="text-xs">
+                API Key: {googlePlacesKey ? '✓ Set' : '✗ Missing'}
+              </Text>
+            </View>
+
               <View className="flex-row items-center bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3">
                 <Ionicons name="pricetag" size={18} color="#6b7280" />
                 <TextInput
@@ -1177,51 +1340,11 @@ export default function TripScreen() {
                   className="flex-1 py-3 px-2 text-gray-900 dark:text-white"
                 />
               </View>
-                <Pressable
-                  onPress={handleAddFromMap}
-                  className="mt-3 py-3 rounded-lg bg-green-600 active:bg-green-700 items-center"
-                >
-                  <Text className="text-white font-semibold">{t("addDestination")}</Text>
-                </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Delete confirmation modal */}
-      <Modal
-        visible={!!deleteTarget}
-        transparent
-        animationType="fade"
-        onRequestClose={cancelDelete}
-      >
-        <View className="flex-1 bg-black/40 items-center justify-center px-6">
-          <View className="bg-white dark:bg-gray-900 rounded-2xl p-5 w-full max-w-md border border-gray-200 dark:border-gray-800">
-            <View className="flex-row items-center mb-3">
-              <View className="w-10 h-10 rounded-full bg-red-50 dark:bg-red-900/30 items-center justify-center mr-3">
-                <Ionicons name="trash" size={20} color="#ef4444" />
-              </View>
-              <Text className="text-lg font-semibold text-gray-900 dark:text-white">
-                {t("deleteTitle")}
-              </Text>
-            </View>
-            <Text className="text-sm text-gray-700 dark:text-gray-300 mb-4">
-              {t("deleteMessage", { name: deleteTarget?.name || "" })}
-            </Text>
-            <View className="flex-row justify-end space-x-3">
               <Pressable
-                onPress={cancelDelete}
-                className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700"
+                onPress={handleAddFromMap}
+                className="mt-3 py-3 rounded-lg bg-green-600 active:bg-green-700 items-center"
               >
-                <Text className="text-sm font-semibold text-gray-700 dark:text-gray-200">
-                  {t("cancel")}
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={confirmDelete}
-                className="px-4 py-2 rounded-lg bg-red-600 active:bg-red-700"
-              >
-                <Text className="text-sm font-semibold text-white">{t("delete")}</Text>
+                <Text className="text-white font-semibold">Add destination</Text>
               </Pressable>
             </View>
           </View>
@@ -1248,19 +1371,4 @@ export default function TripScreen() {
         Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
-  };
-
-  const mapGoogleTypesToTripType = (types: string[]): TripType => {
-    const t = types.map((x) => x.toLowerCase());
-    if (t.some((x) => ["restaurant", "meal_takeaway", "meal_delivery", "cafe", "food"].includes(x)))
-      return "food";
-    if (t.some((x) => ["park", "campground", "tourist_attraction"].includes(x)))
-      return "outdoors";
-    if (t.some((x) => ["museum", "art_gallery", "library", "place_of_worship"].includes(x)))
-      return "culture";
-    if (t.some((x) => ["aquarium", "amusement_park", "spa", "tourist_attraction"].includes(x)))
-      return "water";
-    if (t.includes("hospital")) return "hospital";
-    if (t.includes("police")) return "police";
-    return "custom";
   };
