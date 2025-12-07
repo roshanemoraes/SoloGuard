@@ -15,6 +15,7 @@ import * as Sharing from "expo-sharing";
 import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useAppStore } from "../../src/stores/useAppStore";
+import { useI18n } from "../../src/stores/useI18n";
 
 /** ---- Types from your store ---- */
 type LogRecord = {
@@ -99,14 +100,19 @@ const toCsv = (rows: LogRecord[]) => {
   return [header.join(","), ...lines].join("\n");
 };
 
-const shareCsv = async (filename: string, csv: string) => {
+const shareCsv = async (
+  filename: string,
+  csv: string,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+  titleKey: string
+) => {
   const path = `${FileSystem.cacheDirectory}${filename}`;
   await FileSystem.writeAsStringAsync(path, csv, { encoding: FileSystem.EncodingType.UTF8 });
   const can = await Sharing.isAvailableAsync();
   if (can) {
     await Sharing.shareAsync(path, { mimeType: "text/csv", dialogTitle: "Export Logs", UTI: "public.comma-separated-values-text" });
   } else {
-    Alert.alert("Exported", `Saved to: ${path}`);
+    Alert.alert(t(titleKey), t("savedToPath", { path }));
   }
 };
 
@@ -116,6 +122,7 @@ export default function LogsScreen() {
     clearLogs: () => void;
     clearLogsByIds?: (ids: string[]) => void;
   };
+  const { t } = useI18n();
 
   /** Enable LayoutAnimation on Android */
   useEffect(() => {
@@ -194,29 +201,29 @@ export default function LogsScreen() {
 
   /** Actions */
   const exportAll = async () => {
-    if (merged.length === 0) return Alert.alert("Nothing to export", "No logs yet.");
-    await shareCsv("safeguard-logs-all.csv", toCsv(merged));
+    if (merged.length === 0) return Alert.alert(t("nothingToExport"), t("noLogsYet"));
+    await shareCsv("safeguard-logs-all.csv", toCsv(merged), t, "exportAll");
   };
   const exportShown = async () => {
-    if (filtered.length === 0) return Alert.alert("Nothing to export", "No logs match the filters.");
-    await shareCsv("safeguard-logs-filtered.csv", toCsv(filtered));
+    if (filtered.length === 0) return Alert.alert(t("nothingToExport"), t("noLogsMatch"));
+    await shareCsv("safeguard-logs-filtered.csv", toCsv(filtered), t, "exportShown");
   };
   const clearAll = () =>
-    Alert.alert("Clear All Logs", "This will remove all logs. Continue?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Clear All", style: "destructive", onPress: () => clearLogs() },
+    Alert.alert(t("clearAllTitle"), t("clearAllMessage"), [
+      { text: t("cancel"), style: "cancel" },
+      { text: t("clearAll"), style: "destructive", onPress: () => clearLogs() },
     ]);
   const clearShown = () => {
-    if (filtered.length === 0) return Alert.alert("Nothing to clear", "No logs match the filters.");
+    if (filtered.length === 0) return Alert.alert(t("nothingToClear"), t("noLogsMatch"));
     const ids = filtered.map((l) => l.id);
     const store = useAppStore.getState() as any;
     if (typeof store.clearLogsByIds === "function") {
-      Alert.alert("Clear Shown Logs", `Remove ${ids.length} filtered logs?`, [
-        { text: "Cancel", style: "cancel" },
-        { text: "Clear", style: "destructive", onPress: () => store.clearLogsByIds(ids) },
+      Alert.alert(t("clearShownTitle"), t("clearShownMessage", { count: ids.length }), [
+        { text: t("cancel"), style: "cancel" },
+        { text: t("clear"), style: "destructive", onPress: () => store.clearLogsByIds(ids) },
       ]);
     } else {
-      Alert.alert("Feature not available", "Add clearLogsByIds(ids: string[]) to the store to enable clearing only filtered logs.");
+      Alert.alert(t("featureNotAvailable"), t("addClearLogsByIds"));
     }
   };
 
@@ -227,8 +234,8 @@ export default function LogsScreen() {
       <View className="bg-white dark:bg-gray-800 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
         <View className="flex-row items-center justify-between">
           <View className="px-2">
-            <Text className="text-lg font-semibold text-gray-900 dark:text-white">Activity Logs</Text>
-            <Text className="text-sm text-gray-500 dark:text-gray-400">• {monitoringLogs.length} row</Text>
+            <Text className="text-lg font-semibold text-gray-900 dark:text-white">{t("activityLogs")}</Text>
+            <Text className="text-sm text-gray-500 dark:text-gray-400">{t("rows", { count: monitoringLogs.length })}</Text>
           </View>
 
           {/* Collapsible toggles */}
@@ -239,7 +246,7 @@ export default function LogsScreen() {
             >
               <View className="flex-row items-center">
                 <Ionicons name={showFilters ? "chevron-up" : "chevron-down"} size={16} color="#111827" />
-                <Text className="ml-1 text-gray-900 dark:text-white">Filters</Text>
+                <Text className="ml-1 text-gray-900 dark:text-white">{t("filters")}</Text>
               </View>
             </Pressable>
 
@@ -249,7 +256,7 @@ export default function LogsScreen() {
             >
               <View className="flex-row items-center">
                 <Ionicons name={showTools ? "chevron-up" : "chevron-down"} size={16} color="#111827" />
-                <Text className="ml-1 text-gray-900 dark:text-white">Tools</Text>
+                <Text className="ml-1 text-gray-900 dark:text-white">{t("tools")}</Text>
               </View>
             </Pressable>
           </View>
@@ -261,16 +268,16 @@ export default function LogsScreen() {
         <View className="px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
           <View className="flex-row flex-wrap" style={{ rowGap: 6 }}>
             <Pressable onPress={exportAll}  className="bg-blue-600 active:bg-blue-700 px-3 py-2 rounded-lg mr-2 mt-2">
-              <Text className="text-white text-sm font-medium">Export All</Text>
+              <Text className="text-white text-sm font-medium">{t("exportAll")}</Text>
             </Pressable>
             <Pressable onPress={exportShown} className="bg-blue-500 active:bg-blue-600 px-3 py-2 rounded-lg mr-2 mt-2">
-              <Text className="text-white text-sm font-medium">Export Shown</Text>
+              <Text className="text-white text-sm font-medium">{t("exportShown")}</Text>
             </Pressable>
             <Pressable onPress={clearAll}   className="bg-red-600  active:bg-red-700  px-3 py-2 rounded-lg mr-2 mt-2">
-              <Text className="text-white text-sm font-medium">Clear All</Text>
+              <Text className="text-white text-sm font-medium">{t("clearAll")}</Text>
             </Pressable>
             <Pressable onPress={clearShown} className="bg-red-500  active:bg-red-600  px-3 py-2 rounded-lg mr-2 mt-2">
-              <Text className="text-white text-sm font-medium">Clear Shown</Text>
+              <Text className="text-white text-sm font-medium">{t("clearShown")}</Text>
             </Pressable>
           </View>
         </View>
@@ -279,18 +286,18 @@ export default function LogsScreen() {
       {/* Filters */}
       {showFilters && (
         <View className="px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-          <Text className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Filter by Date & Time</Text>
+          <Text className="text-sm font-semibold text-gray-900 dark:text-white mb-3">{t("filterByDateTime")}</Text>
 
           {/* From */}
           <View className="flex-row items-center mb-2">
-            <Text className="w-12 text-xs text-gray-500 dark:text-gray-400">From</Text>
+            <Text className="w-12 text-xs text-gray-500 dark:text-gray-400">{t("from")}</Text>
 
             {/* Date */}
             <Pressable
               onPress={() => (Platform.OS === "android" ? openAndroidDate(startDate, setStartDate) : setStartDate(startDate ?? new Date()))}
               className="flex-1 bg-gray-100 dark:bg-gray-700 rounded px-3 py-2 mr-2"
             >
-              <Text className="text-gray-900 dark:text-white">{startDate ? startDate.toLocaleDateString() : "Any date"}</Text>
+              <Text className="text-gray-900 dark:text-white">{startDate ? startDate.toLocaleDateString() : t("anyDate")}</Text>
             </Pressable>
 
             {/* Time */}
@@ -298,20 +305,20 @@ export default function LogsScreen() {
               onPress={() => (Platform.OS === "android" ? openAndroidTime(startTime, setStartTime) : setStartTime(startTime ?? new Date()))}
               className="w-28 bg-gray-100 dark:bg-gray-700 rounded px-3 py-2"
             >
-              <Text className="text-gray-900 dark:text-white">{startTime ? startTime.toLocaleTimeString() : "Any time"}</Text>
+              <Text className="text-gray-900 dark:text-white">{startTime ? startTime.toLocaleTimeString() : t("anyTime")}</Text>
             </Pressable>
           </View>
 
           {/* To */}
           <View className="flex-row items-center mb-2">
-            <Text className="w-12 text-xs text-gray-500 dark:text-gray-400">To</Text>
+            <Text className="w-12 text-xs text-gray-500 dark:text-gray-400">{t("to")}</Text>
 
             {/* Date */}
             <Pressable
               onPress={() => (Platform.OS === "android" ? openAndroidDate(endDate, setEndDate) : setEndDate(endDate ?? new Date()))}
               className="flex-1 bg-gray-100 dark:bg-gray-700 rounded px-3 py-2 mr-2"
             >
-              <Text className="text-gray-900 dark:text-white">{endDate ? endDate.toLocaleDateString() : "Any date"}</Text>
+              <Text className="text-gray-900 dark:text-white">{endDate ? endDate.toLocaleDateString() : t("anyDate")}</Text>
             </Pressable>
 
             {/* Time */}
@@ -319,7 +326,7 @@ export default function LogsScreen() {
               onPress={() => (Platform.OS === "android" ? openAndroidTime(endTime, setEndTime) : setEndTime(endTime ?? new Date()))}
               className="w-28 bg-gray-100 dark:bg-gray-700 rounded px-3 py-2"
             >
-              <Text className="text-gray-900 dark:text-white">{endTime ? endTime.toLocaleTimeString() : "Any time"}</Text>
+              <Text className="text-gray-900 dark:text-white">{endTime ? endTime.toLocaleTimeString() : t("anyTime")}</Text>
             </Pressable>
           </View>
 
@@ -339,7 +346,7 @@ export default function LogsScreen() {
 
           <View className="flex-row justify-end mt-2">
             <Pressable onPress={resetFilters} className="bg-gray-200 dark:bg-gray-700 px-3 py-2 rounded">
-              <Text className="text-gray-900 dark:text-white">Reset</Text>
+              <Text className="text-gray-900 dark:text-white">{t("reset")}</Text>
             </Pressable>
           </View>
         </View>
@@ -349,8 +356,8 @@ export default function LogsScreen() {
       {merged.length === 0 ? (
         <View className="flex-1 items-center justify-center px-4">
           <Ionicons name="document-text-outline" size={64} color="#9ca3af" />
-          <Text className="text-xl font-medium text-gray-900 dark:text-white mt-4 mb-2">No Logs Yet</Text>
-          <Text className="text-center text-gray-500 dark:text-gray-400">Monitoring logs will appear here once you start using SafeGuard</Text>
+          <Text className="text-xl font-medium text-gray-900 dark:text-white mt-4 mb-2">{t("noLogsYet")}</Text>
+          <Text className="text-center text-gray-500 dark:text-gray-400">{t("logsHint")}</Text>
         </View>
       ) : (
         <ScrollView className="flex-1">
@@ -420,3 +427,4 @@ export default function LogsScreen() {
     </View>
   );
 }
+

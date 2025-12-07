@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useAppStore } from "../src/stores/useAppStore";
 import { EmergencyContact, AppSettings } from "../src/types";
+import { useI18n, Lang } from "../src/stores/useI18n";
 
 /** ---- Country codes (add more as needed) ---- */
 const COUNTRY_CODES = [
@@ -116,6 +117,7 @@ function ModalSelect<T extends string>({
 
 export default function SetupScreen() {
   const router = useRouter();
+  const { lang, setLang } = useI18n();
   const [showAddContact, setShowAddContact] = useState(false);
   const [editingContact, setEditingContact] = useState<EmergencyContact | null>(null);
 
@@ -438,6 +440,31 @@ export default function SetupScreen() {
     <View className="flex-1 bg-gray-50 dark:bg-gray-900">
       <ScrollView className="flex-1">
         <View className="p-4">
+          {/* Language selector */}
+          <View className="flex-row items-center justify-end mb-3 space-x-2">
+            {[
+              { code: "en" as Lang, label: "English" },
+              { code: "si" as Lang, label: "සිංහල" },
+            ].map((opt) => (
+              <Pressable
+                key={opt.code}
+                onPress={() => setLang(opt.code)}
+                className={`px-3 py-2 rounded-lg border ${
+                  lang === opt.code
+                    ? "bg-green-600 border-green-700"
+                    : "bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700"
+                }`}
+              >
+                <Text
+                  className={`text-xs font-semibold ${
+                    lang === opt.code ? "text-white" : "text-gray-800 dark:text-gray-100"
+                  }`}
+                >
+                  {opt.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
           {toast && (
             <View
               className="mb-4 rounded-lg p-3 border shadow-sm flex-row items-center space-x-2"

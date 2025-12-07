@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppStore } from "../../src/stores/useAppStore";
+import { useI18n } from "../../src/stores/useI18n";
 
 const COUNTRY_CODES = [
   { label: "Sri Lanka (+94)", value: "+94" },
@@ -26,12 +27,14 @@ function ModalSelect<T extends string>({
   onSelect,
   options,
   title,
+  searchPlaceholder,
 }: {
   visible: boolean;
   onClose: () => void;
   onSelect: (value: T) => void;
   options: { label: string; value: T }[];
   title: string;
+  searchPlaceholder?: string;
 }) {
   const [query, setQuery] = useState("");
   const filtered = options.filter((o) =>
@@ -58,7 +61,7 @@ function ModalSelect<T extends string>({
             </View>
             <View className="mt-3 bg-white/15 rounded-lg px-3 py-2 border border-white/20">
               <TextInput
-                placeholder="Search country or code"
+                placeholder={searchPlaceholder || "Search country or code"}
                 placeholderTextColor="#e5e7eb"
                 value={query}
                 onChangeText={setQuery}
@@ -110,6 +113,7 @@ function ModalSelect<T extends string>({
 
 export default function TabTwoScreen() {
   const { userProfile, updateUserProfile } = useAppStore();
+  const { t } = useI18n();
 
   const [profileCountryCode, setProfileCountryCode] = useState<string>("+94");
   const [profilePhone, setProfilePhone] = useState<string>("");
@@ -195,7 +199,7 @@ export default function TabTwoScreen() {
     setFieldErrors(errors);
 
     if (Object.keys(errors).length > 0) {
-      setToast({ type: "error", message: "Please fix the highlighted fields." });
+      setToast({ type: "error", message: t("fixFields") });
       return;
     }
 
@@ -207,7 +211,7 @@ export default function TabTwoScreen() {
       phoneNumber: profilePhone.trim() ? composedPhone : "",
     });
 
-    setToast({ type: "success", message: "Profile saved and used in SOS messages." });
+    setToast({ type: "success", message: t("profileSaved") });
   };
 
   return (
@@ -240,21 +244,21 @@ export default function TabTwoScreen() {
           )}
           <View className="flex-row items-center justify-between">
             <Text className="text-2xl font-bold text-gray-900 dark:text-white">
-              Your Profile
+              {t("yourProfile")}
             </Text>
             <Pressable
               onPress={handleSaveProfile}
               className="bg-blue-600 active:bg-blue-700 px-4 py-2 rounded-lg flex-row items-center space-x-2"
             >
               <Ionicons name="save" size={18} color="white" />
-              <Text className="text-white font-medium">Save</Text>
+              <Text className="text-white font-medium">{t("save")}</Text>
             </Pressable>
           </View>
 
           <View className="bg-white dark:bg-gray-800 rounded-lg p-4 space-y-4">
             <View>
               <Text className="text-base font-medium text-gray-900 dark:text-white mb-2">
-                Full Name
+                {t("fullName")}
               </Text>
               <TextInput
                 value={profileForm.fullName}
@@ -265,7 +269,7 @@ export default function TabTwoScreen() {
                     fullName: text.trim().length >= 2 ? undefined : "Enter at least 2 characters.",
                   }));
                 }}
-                placeholder="Enter your full name"
+                placeholder={t("enterFullName")}
                 className="bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-3 rounded-lg"
               />
               {fieldErrors.fullName && (
@@ -275,7 +279,7 @@ export default function TabTwoScreen() {
 
             <View>
               <Text className="text-base font-medium text-gray-900 dark:text-white mb-2">
-                Username
+                {t("username")}
               </Text>
               <TextInput
                 value={profileForm.username}
@@ -287,7 +291,7 @@ export default function TabTwoScreen() {
                     username: valid ? undefined : "Use letters/numbers ._- (2-20 chars).",
                   }));
                 }}
-                placeholder="@handle"
+                placeholder={t("handlePlaceholder")}
                 autoCapitalize="none"
                 className="bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-3 rounded-lg"
               />
@@ -298,7 +302,7 @@ export default function TabTwoScreen() {
 
               <View>
                 <Text className="text-base font-medium text-gray-900 dark:text-white mb-2">
-                  Phone Number
+                  {t("phoneNumber")}
                 </Text>
                 <View className="flex-row">
                 <Pressable
@@ -325,13 +329,13 @@ export default function TabTwoScreen() {
                         : undefined,
                     }));
                   }}
-                  placeholder="Your phone"
+                  placeholder={t("yourPhone")}
                   keyboardType="phone-pad"
                   className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-3 text-gray-900 dark:text-white"
                 />
                 </View>
                 <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Stored as: {profileCountryCode}
+                  {t("storedAs")} {profileCountryCode}
                   {profilePhone.replace(/[^0-9]/g, "")}
                 </Text>
                 {fieldErrors.phone && (
@@ -341,7 +345,7 @@ export default function TabTwoScreen() {
 
             <View>
               <Text className="text-base font-medium text-gray-900 dark:text-white mb-2">
-                Email (optional)
+                {t("emailOptional")}
               </Text>
               <TextInput
                 value={profileForm.email}
@@ -352,7 +356,7 @@ export default function TabTwoScreen() {
                     email: validateEmail(text) ? undefined : "Enter a valid email.",
                   }));
                 }}
-                placeholder="you@example.com"
+                placeholder={t("emailPlaceholder")}
                 autoCapitalize="none"
                 keyboardType="email-address"
                 className="bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-3 rounded-lg"
@@ -364,21 +368,21 @@ export default function TabTwoScreen() {
 
             <View>
               <Text className="text-base font-medium text-gray-900 dark:text-white mb-2">
-                Medical / Other Notes
+                {t("medicalNotes")}
               </Text>
               <TextInput
                 value={profileForm.medicalInfo}
                 onChangeText={(text) =>
                   setProfileForm({ ...profileForm, medicalInfo: text })
                 }
-                placeholder="Allergies, medications, other critical info"
+                placeholder={t("medicalPlaceholder")}
                 multiline
                 numberOfLines={3}
                 textAlignVertical="top"
                 className="bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-3 rounded-lg"
               />
               <Text className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                These details are included in SOS messages for responders.
+                {t("medicalHelper")}
               </Text>
             </View>
           </View>
@@ -388,7 +392,8 @@ export default function TabTwoScreen() {
       <ModalSelect
         visible={showProfileCountryModal}
         onClose={() => setShowProfileCountryModal(false)}
-        title="Select Country Code"
+        title={t("selectCountryCode")}
+        searchPlaceholder={t("searchCountryCode")}
         options={COUNTRY_CODES}
         onSelect={(v) => setProfileCountryCode(v)}
       />
