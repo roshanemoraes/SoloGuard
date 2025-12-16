@@ -384,35 +384,75 @@ export default function LogsScreen() {
                       </View>
                       <Text className="text-xs text-gray-500 dark:text-gray-400 mb-2">{date}</Text>
 
-                      {/* Single record chips: Battery + Location */}
-                      <View className="flex-row flex-wrap items-center">
+                      {/* Visual stats row */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, marginBottom: 12, gap: 16 }}>
                         {typeof log.batteryLevel === "number" && (
-                          <View className="flex-row items-center mr-2 mb-2 px-2 py-1 rounded" style={{ backgroundColor: badgeBg }}>
-                            <Ionicons name="battery-half" size={12} color={logColor} />
-                            <Text className="text-xs font-medium ml-1" style={{ color: logColor }}>
-                              {Math.round(log.batteryLevel)}%
-                            </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <View style={{
+                              width: 36,
+                              height: 36,
+                              borderRadius: 18,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              marginRight: 8,
+                              backgroundColor: badgeBg
+                            }}>
+                              <Ionicons name="battery-charging" size={18} color={logColor} />
+                            </View>
+                            <View>
+                              <Text style={{ fontSize: 11, color: '#6b7280' }}>Battery</Text>
+                              <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827' }}>
+                                {Math.round(log.batteryLevel)}%
+                              </Text>
+                            </View>
                           </View>
                         )}
 
                         {log.location && (
-                          <View className="flex-row items-center mr-2 mb-2 px-2 py-1 rounded" style={{ backgroundColor: badgeBg }}>
-                            <Ionicons name="location" size={12} color={logColor} />
-                            <Text className="text-xs font-medium ml-1" style={{ color: logColor }}>
-                              {log.location.latitude.toFixed(3)}, {log.location.longitude.toFixed(3)}
-                            </Text>
+                          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+                            <View style={{
+                              width: 36,
+                              height: 36,
+                              borderRadius: 18,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              marginRight: 8,
+                              backgroundColor: badgeBg
+                            }}>
+                              <Ionicons name="location-sharp" size={18} color={logColor} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 11, color: '#6b7280' }}>Location</Text>
+                              <Text style={{ fontSize: 11, fontWeight: '500', color: '#111827' }}>
+                                {log.location.latitude.toFixed(4)}, {log.location.longitude.toFixed(4)}
+                              </Text>
+                            </View>
                           </View>
                         )}
                       </View>
 
                       {log.location?.address && (
-                        <Text className="text-xs text-gray-600 dark:text-gray-300">{log.location.address}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginTop: 4, marginBottom: 8 }}>
+                          <Ionicons name="navigate-circle" size={14} color="#6b7280" style={{ marginTop: 1, marginRight: 6 }} />
+                          <Text style={{ flex: 1, fontSize: 11, color: '#4b5563' }}>{log.location.address}</Text>
+                        </View>
                       )}
 
-                      {log.data && (
-                        <View className="bg-gray-50 dark:bg-gray-700 rounded p-2 mt-2">
-                          <Text className="text-xs text-gray-600 dark:text-gray-300">
-                            {typeof log.data === "string" ? log.data : JSON.stringify(log.data, null, 2)}
+                      {log.data && typeof log.data === "string" && (
+                        <View style={{
+                          backgroundColor: '#eff6ff',
+                          borderRadius: 8,
+                          padding: 12,
+                          marginTop: 8,
+                          borderWidth: 1,
+                          borderColor: '#bfdbfe'
+                        }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                            <Ionicons name="information-circle" size={14} color="#3b82f6" />
+                            <Text style={{ fontSize: 11, fontWeight: '500', color: '#1e40af', marginLeft: 4 }}>Details</Text>
+                          </View>
+                          <Text style={{ fontSize: 11, color: '#374151' }}>
+                            {log.data}
                           </Text>
                         </View>
                       )}
