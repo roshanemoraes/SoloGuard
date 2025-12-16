@@ -147,6 +147,7 @@ export default function SetupScreen() {
     name: "",
   });
   const [togglingContactId, setTogglingContactId] = useState<string | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   /** ---- SETTINGS FORM: Inactivity (HH/MM) + Interval (MM/SS) + Battery ---- */
   // Inactivity (store in minutes)
@@ -200,7 +201,7 @@ export default function SetupScreen() {
     }
   };
 
-  const commitInactivityHM = () => {
+  const commitInactivityHM = (markChanged = true) => {
     const h = toInt(inactH);
     const m = clamp059(toInt(inactM));
     const totalMinutes = h * 60 + m;
@@ -211,6 +212,7 @@ export default function SetupScreen() {
     setSettingErrors((prev) => ({ ...prev, inactivity: undefined }));
     updateSettings({ inactivityThreshold: totalMinutes });
     setInactM(String(m)); // reflect clamp
+    if (markChanged) setHasUnsavedChanges(true);
   };
 
   const validateIntervalInline = (mText: string, sText: string) => {
@@ -224,7 +226,7 @@ export default function SetupScreen() {
     }
   };
 
-  const commitIntervalMS = () => {
+  const commitIntervalMS = (markChanged = true) => {
     const m = toInt(intM);
     const s = clamp059(toInt(intS));
     const totalSeconds = m * 60 + s;
@@ -235,6 +237,7 @@ export default function SetupScreen() {
     setSettingErrors((prev) => ({ ...prev, interval: undefined }));
     updateSettings({ updateInterval: totalSeconds });
     setIntS(String(s)); // reflect clamp
+    if (markChanged) setHasUnsavedChanges(true);
   };
 
   const validateBatteryInline = (val: string) => {
@@ -255,7 +258,7 @@ export default function SetupScreen() {
     }
   };
 
-  const commitBattery = () => {
+  const commitBattery = (markChanged = true) => {
     const n = Number(batteryVal);
     if (!Number.isFinite(n)) {
       setSettingErrors((prev) => ({ ...prev, battery: "Enter a number 1-100." }));
@@ -265,6 +268,7 @@ export default function SetupScreen() {
     setSettingErrors((prev) => ({ ...prev, battery: undefined }));
     if (String(clamped) !== batteryVal) setBatteryVal(String(clamped));
     updateSettings({ batteryThreshold: clamped });
+    if (markChanged) setHasUnsavedChanges(true);
   };
 
   /** ---- Contacts ---- */
@@ -392,6 +396,26 @@ export default function SetupScreen() {
 
   const handleSettingsChange = (key: keyof AppSettings, value: any) => {
     updateSettings({ [key]: value });
+    setHasUnsavedChanges(true);
+  };
+
+  const handleSaveAll = () => {
+    // Validate and commit all settings
+    commitInactivityHM(false);
+    commitIntervalMS(false);
+    commitBattery(false);
+
+    // Check for errors
+    if (settingErrors.inactivity || settingErrors.interval || settingErrors.battery) {
+      setToast({ type: "error", message: "Please fix validation errors before saving." });
+      return;
+    }
+
+    setHasUnsavedChanges(false);
+    setToast({ type: "success", message: "All settings saved successfully!" });
+
+    // Auto-dismiss success toast after 3 seconds
+    setTimeout(() => setToast(null), 3000);
   };
 
   /** ---- UI ---- */
@@ -513,6 +537,32 @@ export default function SetupScreen() {
           {/* Settings Section */}
           <View className="mb-6">
             <Text className="text-xl font-bold text-gray-900 dark:text-white mb-4">Monitoring Settings</Text>
+
+            {/* Save Button at Top */}
+            <View className="mb-4">
+              <Pressable
+                onPress={handleSaveAll}
+                className={`py-4 rounded-lg flex-row items-center justify-center space-x-2 ${
+                  hasUnsavedChanges
+                    ? "bg-green-600 active:bg-green-700"
+                    : "bg-gray-400 dark:bg-gray-600"
+                }`}
+              >
+                <Ionicons
+                  name={hasUnsavedChanges ? "save" : "checkmark-circle"}
+                  size={22}
+                  color="white"
+                />
+                <Text className="text-white text-lg font-semibold">
+                  {hasUnsavedChanges ? "Save All Settings" : "All Settings Saved"}
+                </Text>
+              </Pressable>
+              {hasUnsavedChanges && (
+                <Text className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">
+                  You have unsaved changes
+                </Text>
+              )}
+            </View>
 
             <View className="bg-white dark:bg-gray-800 rounded-lg p-4 space-y-6">
               {/* Inactivity Threshold (HH MM -> minutes) */}
