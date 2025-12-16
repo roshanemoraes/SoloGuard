@@ -22,6 +22,7 @@ export default function HomeScreen() {
   const [showSOSConfirm, setShowSOSConfirm] = useState(false);
   const [sosSending, setSosSending] = useState(false);
   const [sosResult, setSosResult] = useState<null | { status: "success" | "error"; message: string }>(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
   const {
     isMonitoring,
@@ -31,9 +32,20 @@ export default function HomeScreen() {
     isEmergencyMode,
     settings,
     updateBatteryStatus,
+    userProfile,
   } = useAppStore();
   const { t } = useI18n();
   const hasActiveContacts = emergencyContacts.some((c) => c.isActive);
+
+  // Check if profile is complete
+  const isProfileComplete = userProfile.fullName && userProfile.fullName.trim().length >= 2;
+
+  useEffect(() => {
+    // Check profile completion on mount
+    if (!isProfileComplete) {
+      setShowProfileModal(true);
+    }
+  }, [isProfileComplete]);
 
   useEffect(() => {
     // Initialize monitoring on app start
@@ -165,12 +177,14 @@ export default function HomeScreen() {
   };
 
   return (
-    <ScrollView
-      className="flex-1 bg-gray-50 dark:bg-gray-900"
-      refreshControl={
-        <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
-      }
-    >
+    <View className="flex-1">
+      <ScrollView
+        className="flex-1 bg-gray-50 dark:bg-gray-900"
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
+        }
+        pointerEvents={!isProfileComplete ? "none" : "auto"}
+      >
       {/* Status Header */}
       <View className="bg-white dark:bg-gray-800 mx-4 mt-4 rounded-lg p-4 shadow-sm">
         <View className="flex-row items-center justify-between mb-3">
@@ -415,6 +429,66 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      {/* Profile completion modal */}
+      <Modal
+        visible={showProfileModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {}}
+      >
+        <View className="flex-1 bg-black/60 justify-center items-center px-4">
+          <View className="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-2xl border border-gray-200 dark:border-gray-700 w-full max-w-md">
+            <View className="items-center mb-4">
+              <View className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/50 items-center justify-center mb-3">
+                <Ionicons name="person-add" size={32} color="#2563eb" />
+              </View>
+              <Text className="text-xl font-bold text-gray-900 dark:text-white text-center">
+                Complete Your Profile
+              </Text>
+            </View>
+
+            <Text className="text-sm text-gray-700 dark:text-gray-300 text-center mb-6">
+              Before you can use SafeGuard, please complete your profile information. This helps us protect you better in case of emergencies.
+            </Text>
+
+            <View className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-4 mb-6 border border-blue-100 dark:border-blue-800">
+              <View className="flex-row items-start space-x-2">
+                <Ionicons name="information-circle" size={20} color="#2563eb" />
+                <View className="flex-1">
+                  <Text className="text-xs font-semibold text-blue-800 dark:text-blue-200 mb-1">
+                    Required Information:
+                  </Text>
+                  <Text className="text-xs text-blue-700 dark:text-blue-300">
+                    • Full name (at least 2 characters){'\n'}
+                    • Emergency contacts{'\n'}
+                    • Optional: Phone, email, medical info
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <Pressable
+              onPress={() => {
+                setShowProfileModal(false);
+                router.push("/(tabs)/two");
+              }}
+              className="bg-blue-600 active:bg-blue-700 rounded-lg py-4 items-center mb-3"
+            >
+              <View className="flex-row items-center space-x-2">
+                <Ionicons name="arrow-forward" size={20} color="white" />
+                <Text className="text-white font-semibold text-base">
+                  Complete Profile Now
+                </Text>
+              </View>
+            </Pressable>
+
+            <Text className="text-xs text-gray-500 dark:text-gray-400 text-center">
+              You won't be able to use the app until your profile is complete.
+            </Text>
+          </View>
+        </View>
+      </Modal>
+
       {/* SOS confirmation modal */}
       <Modal
         visible={showSOSConfirm}
@@ -478,7 +552,16 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
-    </ScrollView>
+      </ScrollView>
+
+      {/* Blur overlay when profile incomplete */}
+      {!isProfileComplete && (
+        <View
+          className="absolute inset-0 bg-gray-900/20"
+          pointerEvents="none"
+        />
+      )}
+    </View>
   );
 }
 
