@@ -17,6 +17,7 @@ import {
 import MapView, { Marker, MapPressEvent, PROVIDER_GOOGLE } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
+import NetInfo from "@react-native-community/netinfo";
 import { TripDestination, NearbyPlace } from "../src/types";
 import { useAppStore } from "../src/stores/useAppStore";
 
@@ -68,6 +69,15 @@ export default function TripScreen() {
   const [selectingPlaceId, setSelectingPlaceId] = useState<string | null>(null);
   const placesSessionTokenRef = React.useRef<string | null>(null);
   const supportsGoogleMapsProvider = Constants.appOwnership !== "expo"; // Expo Go lacks Google Maps SDK
+  const [isOnline, setIsOnline] = useState(true);
+
+  // Monitor network connectivity
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      setIsOnline(state.isConnected ?? false);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const getPlacesSessionToken = () => {
     if (!placesSessionTokenRef.current) {
@@ -396,6 +406,27 @@ export default function TripScreen() {
     pageToken?: string,
     fallback: PlaceSuggestion[] = []
   ) => {
+    // If offline, use cached data or fallback immediately
+    if (!isOnline) {
+      const cached = tripNearbyCache[origin.id] || [];
+      if (cached.length > 0) {
+        setExploreResults(cached);
+        setExploreNextPageToken(null);
+        return;
+      }
+      if (fallback.length > 0) {
+        setExploreResults(fallback);
+        setNearbyPlacesForDestination(origin.id, fallback as NearbyPlace[]);
+        setExploreNextPageToken(null);
+        return;
+      }
+      Alert.alert(
+        "Offline Mode",
+        "No internet connection. Cached places will be shown when available."
+      );
+      return;
+    }
+
     const typeMap: Record<string, string> = {
       food: "restaurant",
       outdoors: "park",
@@ -800,11 +831,25 @@ export default function TripScreen() {
           {/* Add Destination Section */}
           <View className="mb-6">
             <View className="items-center mb-4">
-              <Text className="text-2xl font-bold text-gray-900 dark:text-white">
-                Where to?
-              </Text>
+              <View className="flex-row items-center space-x-2">
+                <Text className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Where to?
+                </Text>
+                {!isOnline && (
+                  <View className="px-2 py-1 rounded-full bg-orange-100 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800">
+                    <View className="flex-row items-center space-x-1">
+                      <Ionicons name="cloud-offline" size={12} color="#f97316" />
+                      <Text className="text-[10px] font-semibold text-orange-700 dark:text-orange-300">
+                        Offline
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </View>
               <Text className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                Places to go, things to do, hotels...
+                {isOnline
+                  ? "Places to go, things to do, hotels..."
+                  : "Showing cached places and offline destinations"}
               </Text>
             </View>
 
@@ -1176,9 +1221,18 @@ export default function TripScreen() {
         <View className="flex-1 bg-black/40 justify-end">
           <View className="bg-white dark:bg-gray-900 rounded-t-2xl p-4 max-h-[60%]">
             <View className="flex-row items-center justify-between mb-3">
-              <Text className="text-lg font-bold text-gray-900 dark:text-white">
-                {exploreTitle || "Nearby"}
-              </Text>
+              <View className="flex-row items-center space-x-2">
+                <Text className="text-lg font-bold text-gray-900 dark:text-white">
+                  {exploreTitle || "Nearby"}
+                </Text>
+                {!isOnline && exploreResults.length > 0 && (
+                  <View className="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30">
+                    <Text className="text-[10px] font-semibold text-blue-700 dark:text-blue-300">
+                      Cached
+                    </Text>
+                  </View>
+                )}
+              </View>
               <Pressable
                 onPress={() => {
                   setShowExploreModal(false);
@@ -1319,17 +1373,24 @@ export default function TripScreen() {
             </MapView>
 
             <View className="px-4 py-3 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+              {!supportsGoogleMapsProvider && (
+                <View className="mb-3 bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 rounded-lg p-3">
+                  <View className="flex-row items-start space-x-2">
+                    <Ionicons name="warning" size={16} color="#f97316" />
+                    <View className="flex-1">
+                      <Text className="text-xs font-semibold text-orange-800 dark:text-orange-200 mb-1">
+                        Limited in Expo Go
+                      </Text>
+                      <Text className="text-[10px] text-orange-700 dark:text-orange-300">
+                        Maps may not render properly in Expo Go. Build a development build for full functionality (see README).
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              )}
               <Text className="text-sm text-gray-600 dark:text-gray-300 mb-1">
                 Tap on the map to drop a pin, then name it.
               </Text>
-                          <View className="px-4 py-2 bg-blue-50">
-              <Text className="text-xs">
-                Provider: {supportsGoogleMapsProvider ? 'Google Maps' : 'Default Map'}
-              </Text>
-              <Text className="text-xs">
-                API Key: {googlePlacesKey ? '✓ Set' : '✗ Missing'}
-              </Text>
-            </View>
 
               <View className="flex-row items-center bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3">
                 <Ionicons name="pricetag" size={18} color="#6b7280" />

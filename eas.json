@@ -1,0 +1,28 @@
+{
+  "cli": {
+    "version": ">= 5.2.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_PLACES_KEY": "$EXPO_PUBLIC_GOOGLE_PLACES_KEY"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_PLACES_KEY": "$EXPO_PUBLIC_GOOGLE_PLACES_KEY"
+      }
+    },
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_PLACES_KEY": "$EXPO_PUBLIC_GOOGLE_PLACES_KEY"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
