@@ -15,7 +15,7 @@ export class LocationService {
     }
   }
 
-  async getCurrentLocation(): Promise<LocationData | null> {
+  async getCurrentLocation(includeAddress = false): Promise<LocationData | null> {
     try {
       const hasPermission = await this.requestPermissions();
       if (!hasPermission) {
@@ -23,14 +23,16 @@ export class LocationService {
       }
 
       const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-        timeInterval: 5000,
+        accuracy: Location.Accuracy.Balanced,
       });
 
-      const address = await this.getAddressFromCoordinates(
-        location.coords.latitude,
-        location.coords.longitude
-      );
+      let address: string | undefined = undefined;
+      if (includeAddress) {
+        address = await this.getAddressFromCoordinates(
+          location.coords.latitude,
+          location.coords.longitude
+        );
+      }
 
       return {
         latitude: location.coords.latitude,
@@ -62,23 +64,19 @@ export class LocationService {
 
       this.watchId = await Location.watchPositionAsync(
         {
-          accuracy: Location.Accuracy.High,
+          accuracy: Location.Accuracy.BestForNavigation,
           timeInterval: updateInterval,
-          distanceInterval: 10, // Update every 10 meters
+          distanceInterval: 1, // Update when moved at least 1 meter
         },
-        async (location) => {
-          const address = await this.getAddressFromCoordinates(
-            location.coords.latitude,
-            location.coords.longitude
-          );
-
+        (location) => {
+          // Skip expensive reverse geocoding - store coordinates only
           const locationData: LocationData = {
             latitude: location.coords.latitude,
             longitude: location.coords.longitude,
             altitude: location.coords.altitude,
             accuracy: location.coords.accuracy,
             timestamp: location.timestamp,
-            address,
+            address: undefined,
           };
 
           onLocationUpdate(locationData);

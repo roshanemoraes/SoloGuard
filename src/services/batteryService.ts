@@ -1,6 +1,5 @@
 // src/services/batteryService.ts
 import * as Battery from "expo-battery";
-import { Platform } from "react-native";
 import { BatteryStatus } from "../types";
 
 /*
@@ -56,16 +55,19 @@ export class BatteryService {
   }
 
   /**
-   * Start monitoring battery. Uses native listeners; on web (or if anything fails),
-   * falls back to polling every `updateInterval` ms.
+   * Start monitoring battery using polling at the specified interval.
+   * This ensures battery updates respect the user's configured update interval.
    */
   async startBatteryMonitoring(
     onBatteryUpdate: (status: BatteryStatus) => void,
     updateInterval = 30000 // 30s
   ): Promise<void> {
+    // Clear any previous subs/intervals BEFORE setting new listener
+    this.stopBatteryMonitoring();
+
     this.batteryListener = onBatteryUpdate;
 
-    // Emit initial snapshot
+    // Emit initial snapshot immediately
     try {
       const first = await this.snapshot();
       this.batteryListener?.(first);
@@ -73,35 +75,15 @@ export class BatteryService {
       console.warn("Initial battery snapshot failed:", e);
     }
 
-    // Clear any previous subs/intervals
-    this.stopBatteryMonitoring();
-
-    // Prefer native listeners (not fully supported on web)
-    try {
-      this.levelSub = Battery.addBatteryLevelListener(async () => {
+    // Use polling for all platforms to respect updateInterval
+    this.intervalId = setInterval(async () => {
+      try {
         const s = await this.snapshot();
         this.batteryListener?.(s);
-      });
-
-      this.stateSub = Battery.addBatteryStateListener(async () => {
-        const s = await this.snapshot();
-        this.batteryListener?.(s);
-      });
-    } catch (e) {
-      console.warn("Battery listeners unavailable, will use polling:", e);
-    }
-
-    // Web & fallback polling
-    if (Platform.OS === "web" || (!this.levelSub && !this.stateSub)) {
-      this.intervalId = setInterval(async () => {
-        try {
-          const s = await this.snapshot();
-          this.batteryListener?.(s);
-        } catch {
-          // ignore transient failures
-        }
-      }, updateInterval);
-    }
+      } catch {
+        // ignore transient failures
+      }
+    }, updateInterval);
   }
 
   /** Stop monitoring & clean up */

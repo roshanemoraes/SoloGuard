@@ -578,6 +578,7 @@ export default function SetupScreen() {
                         const digits = text.replace(/[^0-9]/g, "");
                         setInactH(digits);
                         validateInactivityInline(digits, inactM);
+                        setHasUnsavedChanges(true);
                       }}
                       onBlur={commitInactivityHM}
                       keyboardType="numeric"
@@ -594,6 +595,7 @@ export default function SetupScreen() {
                         const digits = text.replace(/[^0-9]/g, "");
                         setInactM(digits);
                         validateInactivityInline(inactH, digits);
+                        setHasUnsavedChanges(true);
                       }}
                       onBlur={commitInactivityHM}
                       keyboardType="numeric"
@@ -619,6 +621,7 @@ export default function SetupScreen() {
                     const digits = text.replace(/[^0-9]/g, "");
                     setBatteryVal(digits);
                     validateBatteryInline(digits);
+                    setHasUnsavedChanges(true);
                   }}
                   onBlur={commitBattery}
                   keyboardType="numeric"
@@ -644,6 +647,7 @@ export default function SetupScreen() {
                         const digits = text.replace(/[^0-9]/g, "");
                         setIntM(digits);
                         validateIntervalInline(digits, intS);
+                        setHasUnsavedChanges(true);
                       }}
                       onBlur={commitIntervalMS}
                       keyboardType="numeric"
@@ -660,6 +664,7 @@ export default function SetupScreen() {
                         const digits = text.replace(/[^0-9]/g, "");
                         setIntS(digits);
                         validateIntervalInline(intM, digits);
+                        setHasUnsavedChanges(true);
                       }}
                       onBlur={commitIntervalMS}
                       keyboardType="numeric"

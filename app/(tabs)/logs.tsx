@@ -235,7 +235,7 @@ export default function LogsScreen() {
         <View className="flex-row items-center justify-between">
           <View className="px-2">
             <Text className="text-lg font-semibold text-gray-900 dark:text-white">{t("activityLogs")}</Text>
-            <Text className="text-sm text-gray-500 dark:text-gray-400">{t("rows", { count: monitoringLogs.length })}</Text>
+            <Text className="text-sm text-gray-500 dark:text-gray-400">{t("rows", { count: filtered.length })}</Text>
           </View>
 
           {/* Collapsible toggles */}

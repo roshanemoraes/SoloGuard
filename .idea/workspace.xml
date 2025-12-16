@@ -5,18 +5,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="806ebc31-5b5d-4355-8264-9494ac10662d" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.claude/settings.local.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/app.config.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/eas.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.env" beforeDir="false" afterPath="$PROJECT_DIR$/.env" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/trip.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/trip.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/package-lock.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/package.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/(tabs)/logs.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(tabs)/logs.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/setup.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/setup.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/services/batteryService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/services/batteryService.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/services/locationService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/services/locationService.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
