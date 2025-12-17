@@ -170,7 +170,7 @@ export default function HomeScreen() {
     if (percent == null) return "battery-dead";
     if (percent >= 95) return "battery-full";
     if (percent > 40) return "battery-half";
-    if (percent > 15) return "battery-low";
+    if (percent > 15) return "battery-half"; // battery-low doesn't exist in Ionicons
     return "battery-dead";
   };
 
@@ -459,7 +459,7 @@ export default function HomeScreen() {
             </View>
 
             <Text className="text-sm text-gray-700 dark:text-gray-300 text-center mb-6">
-              Before you can use SafeGuard, please complete your profile information. This helps us protect you better in case of emergencies.
+              Before you can use SoloGuard, please complete your profile information. This helps us protect you better in case of emergencies.
             </Text>
 
             <View className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-4 mb-6 border border-blue-100 dark:border-blue-800">

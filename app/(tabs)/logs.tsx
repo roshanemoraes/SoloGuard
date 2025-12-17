@@ -8,7 +8,9 @@ import {
   Platform,
   LayoutAnimation,
   UIManager,
+  useColorScheme,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
@@ -123,6 +125,7 @@ export default function LogsScreen() {
     clearLogsByIds?: (ids: string[]) => void;
   };
   const { t } = useI18n();
+  const colorScheme = useColorScheme();
 
   /** Enable LayoutAnimation on Android */
   useEffect(() => {
@@ -229,7 +232,8 @@ export default function LogsScreen() {
 
   /** ---- UI ---- */
   return (
-    <View className="flex-1 bg-gray-50 dark:bg-gray-900">
+    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <>
       {/* Header */}
       <View className="bg-white dark:bg-gray-800 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
         <View className="flex-row items-center justify-between">
@@ -400,8 +404,8 @@ export default function LogsScreen() {
                               <Ionicons name="battery-charging" size={18} color={logColor} />
                             </View>
                             <View>
-                              <Text style={{ fontSize: 11, color: '#6b7280' }}>Battery</Text>
-                              <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827' }}>
+                              <Text style={{ fontSize: 11, color: colorScheme === 'dark' ? '#9ca3af' : '#6b7280' }}>Battery</Text>
+                              <Text style={{ fontSize: 16, fontWeight: '600', color: colorScheme === 'dark' ? '#f9fafb' : '#111827' }}>
                                 {Math.round(log.batteryLevel)}%
                               </Text>
                             </View>
@@ -422,8 +426,8 @@ export default function LogsScreen() {
                               <Ionicons name="location-sharp" size={18} color={logColor} />
                             </View>
                             <View style={{ flex: 1 }}>
-                              <Text style={{ fontSize: 11, color: '#6b7280' }}>Location</Text>
-                              <Text style={{ fontSize: 11, fontWeight: '500', color: '#111827' }}>
+                              <Text style={{ fontSize: 11, color: colorScheme === 'dark' ? '#9ca3af' : '#6b7280' }}>Location</Text>
+                              <Text style={{ fontSize: 11, fontWeight: '500', color: colorScheme === 'dark' ? '#f9fafb' : '#111827' }}>
                                 {log.location.latitude.toFixed(4)}, {log.location.longitude.toFixed(4)}
                               </Text>
                             </View>
@@ -464,7 +468,8 @@ export default function LogsScreen() {
           </View>
         </ScrollView>
       )}
-    </View>
+      </>
+    </SafeAreaView>
   );
 }
 

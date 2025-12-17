@@ -45,8 +45,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "SafeGuard",
-          headerTitle: "SafeGuard",
+          title: "SoloGuard",
+          headerTitle: "SoloGuard",
           tabBarIcon: ({ color }) => (
             <IoniconTabBarIcon name="home" color={color} />
           ),
@@ -69,6 +69,7 @@ export default function TabLayout() {
         options={{
           title: "Activity Logs",
           headerTitle: "Activity Logs",
+          headerShown: false,
           tabBarIcon: ({ color }) => (
             <IoniconTabBarIcon name="list" color={color} />
           ),
@@ -79,6 +80,7 @@ export default function TabLayout() {
         options={{
           title: "Profile",
           headerTitle: "Your Profile",
+          headerShown: false,
           tabBarIcon: ({ color }) => (
             <IoniconTabBarIcon name="person-circle" color={color} />
           ),
