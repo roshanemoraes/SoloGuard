@@ -675,8 +675,12 @@ export default function TripScreen() {
               <View>
                 <View className="flex-row items-center space-x-2 mb-2">
                   {searchQuery.length > 0 && (
-                    <View className="px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-700">
-                      <Text className="text-xs font-semibold text-gray-700 dark:text-gray-200">
+                    <View className="flex-1 px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-700">
+                      <Text
+                        className="text-xs font-semibold text-gray-700 dark:text-gray-200"
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
                         Typing: {searchQuery}
                       </Text>
                     </View>
@@ -692,6 +696,7 @@ export default function TripScreen() {
                     }}
                     onFocus={() => setShowSuggestions(searchQuery.trim().length > 0)}
                     placeholder="Places to go, things to do, hotels..."
+                    placeholderTextColor="#9ca3af"
                     className="flex-1 py-3 text-gray-900 dark:text-white"
                   />
                   {searchQuery.length > 0 && (
@@ -716,7 +721,7 @@ export default function TripScreen() {
                   </Text>
                 </Pressable>
                 {showSuggestions && searchQuery.trim().length > 0 && (
-                  <View className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg mt-2 max-h-64">
+                  <View className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg mt-2 overflow-hidden">
                     {searchLoading ? (
                       <View className="px-4 py-3">
                         <Text className="text-sm font-medium text-gray-900 dark:text-white">
@@ -727,39 +732,53 @@ export default function TripScreen() {
                         </Text>
                       </View>
                     ) : suggestionPlaces.length > 0 ? (
-                      suggestionPlaces.map((item, index) => (
-                        <Pressable
-                          key={item.placeId || item.id || `${item.name}-${index}`}
-                          onPress={() => handleSelectPlace(item)}
-                          className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 last:border-b-0 active:bg-gray-50 dark:active:bg-gray-700"
-                        >
-                          <View className="flex-row items-center justify-between">
-                            <View className="flex-1 pr-3">
-                              <Text className="text-base font-medium text-gray-900 dark:text-white">
-                                {item.name}
-                              </Text>
-                              {item.address && (
-                                <Text className="text-sm text-gray-500 dark:text-gray-400">
-                                  {item.address}
+                      <ScrollView
+                        className="max-h-64"
+                        showsVerticalScrollIndicator={true}
+                        nestedScrollEnabled={true}
+                      >
+                        {suggestionPlaces.map((item, index) => (
+                          <Pressable
+                            key={item.placeId || item.id || `${item.name}-${index}`}
+                            onPress={() => handleSelectPlace(item)}
+                            className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 last:border-b-0 active:bg-gray-50 dark:active:bg-gray-700"
+                          >
+                            <View className="flex-row items-center justify-between">
+                              <View className="flex-1 pr-3">
+                                <Text
+                                  className="text-base font-medium text-gray-900 dark:text-white"
+                                  numberOfLines={1}
+                                  ellipsizeMode="tail"
+                                >
+                                  {item.name}
                                 </Text>
+                                {item.address && (
+                                  <Text
+                                    className="text-sm text-gray-500 dark:text-gray-400"
+                                    numberOfLines={2}
+                                    ellipsizeMode="tail"
+                                  >
+                                    {item.address}
+                                  </Text>
+                                )}
+                              </View>
+                              {item.type && (
+                                <View
+                                  className="px-2 py-1 rounded-full"
+                                  style={{ backgroundColor: getDestinationColor(item.type) + "33" }}
+                                >
+                                  <Text
+                                    className="text-xs font-semibold capitalize"
+                                    style={{ color: getDestinationColor(item.type) }}
+                                  >
+                                    {item.type}
+                                  </Text>
+                                </View>
                               )}
                             </View>
-                            {item.type && (
-                              <View
-                                className="px-2 py-1 rounded-full"
-                                style={{ backgroundColor: getDestinationColor(item.type) + "33" }}
-                              >
-                                <Text
-                                  className="text-xs font-semibold capitalize"
-                                  style={{ color: getDestinationColor(item.type) }}
-                                >
-                                  {item.type}
-                                </Text>
-                              </View>
-                            )}
-                          </View>
-                        </Pressable>
-                      ))
+                          </Pressable>
+                        ))}
+                      </ScrollView>
                     ) : (
                       <View className="px-4 py-3">
                         <Text className="text-sm font-medium text-gray-900 dark:text-white">
