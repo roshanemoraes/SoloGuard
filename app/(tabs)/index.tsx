@@ -41,11 +41,11 @@ export default function HomeScreen() {
   const isProfileComplete = userProfile.fullName && userProfile.fullName.trim().length >= 2;
 
   useEffect(() => {
-    // Check profile completion on mount
+    // Check profile completion on mount only
     if (!isProfileComplete) {
       setShowProfileModal(true);
     }
-  }, [isProfileComplete]);
+  }, []); // Only run once on mount
 
   useEffect(() => {
     // Initialize monitoring on app start
@@ -194,7 +194,6 @@ export default function HomeScreen() {
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
         }
-        pointerEvents={!isProfileComplete ? "none" : "auto"}
       >
       {/* Status Header */}
       <View className="bg-white dark:bg-gray-800 mx-4 mt-4 rounded-lg p-4 shadow-sm">
@@ -311,6 +310,7 @@ export default function HomeScreen() {
       <View className="mx-4 mt-6">
         <Pressable
           onPress={handleSOSPress}
+          disabled={!isProfileComplete}
           className="bg-red-600 active:bg-red-700 rounded-2xl p-8 items-center shadow-lg"
           style={({ pressed }) => [
             { transform: [{ scale: pressed ? 0.95 : 1 }] },
@@ -366,6 +366,7 @@ export default function HomeScreen() {
         <View className="flex-row space-x-3">
           <Pressable
             onPress={() => router.push("/setup")}
+            disabled={!isProfileComplete}
             className="flex-1 bg-blue-600 active:bg-blue-700 rounded-lg p-4 items-center"
           >
             <Ionicons name="settings" size={24} color="white" />
@@ -374,6 +375,7 @@ export default function HomeScreen() {
 
           <Pressable
             onPress={() => router.push("/trip")}
+            disabled={!isProfileComplete}
             className="flex-1 bg-green-600 active:bg-green-700 rounded-lg p-4 items-center"
           >
             <Ionicons name="map" size={24} color="white" />
@@ -382,6 +384,7 @@ export default function HomeScreen() {
 
           <Pressable
             onPress={toggleMonitoring}
+            disabled={!isProfileComplete}
             className={`flex-1 rounded-lg p-4 items-center ${
               isMonitoring
                 ? "bg-orange-600 active:bg-orange-700"

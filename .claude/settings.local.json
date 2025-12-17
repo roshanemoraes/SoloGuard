@@ -3,7 +3,9 @@
     "allow": [
       "Bash(npm install:*)",
       "Bash(./gradlew :rnmapbox_maps:compileDebugKotlin:*)",
-      "Bash(./gradlew clean:*)"
+      "Bash(./gradlew clean:*)",
+      "Bash(ls:*)",
+      "Bash(npx expo start)"
     ]
   }
 }

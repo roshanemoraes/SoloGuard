@@ -91,7 +91,7 @@ function RootLayoutNav() {
           <Stack.Screen
             name="about"
             options={{
-              title: "About SafeGuard",
+              title: "About SoloGuard",
               presentation: "modal",
               headerShown: true,
             }}

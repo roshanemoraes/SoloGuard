@@ -1,7 +1,7 @@
 module.exports = {
   expo: {
-    name: "SafeGuard",
-    slug: "SafeGuard",
+    name: "SoloGuard",
+    slug: "SoloGuard",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
@@ -15,14 +15,14 @@ module.exports = {
     },
     assetBundlePatterns: ["**/*"],
     ios: {
-      bundleIdentifier: "com.mscmobile.safeguard",
+      bundleIdentifier: "com.mscmobile.sologuard",
       supportsTablet: true,
       config: {
         googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_PLACES_KEY,
       },
     },
     android: {
-      package: "com.mscmobile.safeguard",
+      package: "com.mscmobile.sologuard",
       adaptiveIcon: {
         foregroundImage: "./assets/images/adaptive-icon.png",
         backgroundColor: "#ffffff",

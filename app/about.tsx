@@ -24,14 +24,14 @@ export default function AboutScreen() {
   const handleSendFeedback = () => {
     Alert.alert(
       "Send Feedback",
-      "Would you like to send feedback about SafeGuard?",
+      "Would you like to send feedback about SoloGuard?",
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Send Email",
           onPress: () =>
             handleOpenLink(
-              "mailto:feedback@safeguard.app?subject=SafeGuard Feedback"
+              "mailto:feedback@sologuard.app?subject=SoloGuard Feedback"
             ),
         },
       ]
@@ -47,7 +47,7 @@ export default function AboutScreen() {
             <Ionicons name="shield-checkmark" size={40} color="white" />
           </View>
           <Text className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-            SafeGuard
+            SoloGuard
           </Text>
           <Text className="text-lg text-gray-600 dark:text-gray-300 mb-1">
             Version 1.0.0
@@ -245,7 +245,7 @@ export default function AboutScreen() {
                   Send Feedback
                 </Text>
                 <Text className="text-sm text-gray-600 dark:text-gray-300">
-                  Help us improve SafeGuard
+                  Help us improve SoloGuard
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
@@ -336,7 +336,7 @@ export default function AboutScreen() {
             Made with ❤️ for solo travelers in Sri Lanka
           </Text>
           <Text className="text-xs text-gray-400 dark:text-gray-500 text-center">
-            © 2024 SafeGuard. All rights reserved.
+            © 2024 SoloGuard. All rights reserved.
           </Text>
         </View>
       </View>

@@ -2,7 +2,7 @@ import React from "react";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Link, Tabs, useRouter } from "expo-router";
-import { Pressable } from "react-native";
+import { Pressable, View, Text, Image } from "react-native";
 
 import Colors from "@/constants/Colors";
 import { useColorScheme } from "@/components/useColorScheme";
@@ -20,6 +20,28 @@ function IoniconTabBarIcon(props: {
   color: string;
 }) {
   return <Ionicons size={28} style={{ marginBottom: -3 }} {...props} />;
+}
+
+function HeaderTitle() {
+  const colorScheme = useColorScheme();
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+      <Image
+        source={require("../../assets/images/icon.png")}
+        style={{ width: 32, height: 32, borderRadius: 8 }}
+        resizeMode="contain"
+      />
+      <Text
+        style={{
+          fontSize: 18,
+          fontWeight: "600",
+          color: colorScheme === "dark" ? "#ffffff" : "#000000",
+        }}
+      >
+        SoloGuard
+      </Text>
+    </View>
+  );
 }
 
 export default function TabLayout() {
@@ -46,7 +68,7 @@ export default function TabLayout() {
         name="index"
         options={{
           title: "SoloGuard",
-          headerTitle: "SoloGuard",
+          headerTitle: () => <HeaderTitle />,
           tabBarIcon: ({ color }) => (
             <IoniconTabBarIcon name="home" color={color} />
           ),

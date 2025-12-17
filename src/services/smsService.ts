@@ -107,7 +107,7 @@ export class SMSService {
         throw new Error('SMS is not available on this device');
       }
 
-      const message = ' SafeGuard Test Message \n\nThis is a test message from SafeGuard to verify SMS functionality.';
+      const message = ' SoloGuard Test Message \n\nThis is a test message from SoloGuard to verify SMS functionality.';
 
       const result = await SMS.sendSMSAsync([phoneNumber], message);
       // Treat both 'sent' and 'unknown' as success (composer opened)
