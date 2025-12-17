@@ -19,6 +19,8 @@
     "@react-native-community/netinfo": "11.1.0",
     "@react-native-picker/picker": "2.6.1",
     "@react-navigation/native": "^6.0.2",
+    "@rnmapbox/maps": "10.1.36",
+    "dotenv": "^17.2.3",
     "expo": "~50.0.17",
     "expo-battery": "~7.7.2",
     "expo-build-properties": "~0.11.1",

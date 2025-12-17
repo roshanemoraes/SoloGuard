@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -11,17 +11,19 @@ import {
   TouchableWithoutFeedback,
   Linking,
   Platform,
-  Animated,
-  PanResponder,
 } from "react-native";
-import MapView, { Marker, MapPressEvent, PROVIDER_GOOGLE } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import NetInfo from "@react-native-community/netinfo";
+import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import { TripDestination, NearbyPlace } from "../src/types";
 import { useAppStore } from "../src/stores/useAppStore";
+import MapboxMap from "../src/components/MapboxMap";
+import { offlineMapService, OfflinePackInfo } from "../src/services/offlineMapService";
 
 export default function TripScreen() {
+  const router = useRouter();
   const {
     tripDestinations,
     addTripDestination,
@@ -68,8 +70,10 @@ export default function TripScreen() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [selectingPlaceId, setSelectingPlaceId] = useState<string | null>(null);
   const placesSessionTokenRef = React.useRef<string | null>(null);
-  const supportsGoogleMapsProvider = Constants.appOwnership !== "expo"; // Expo Go lacks Google Maps SDK
   const [isOnline, setIsOnline] = useState(true);
+  const [offlinePacks, setOfflinePacks] = useState<OfflinePackInfo[]>([]);
+  const [showOfflineMapModal, setShowOfflineMapModal] = useState(false);
+  const [selectedOfflineDestination, setSelectedOfflineDestination] = useState<TripDestination | null>(null);
 
   // Monitor network connectivity
   useEffect(() => {
@@ -79,6 +83,38 @@ export default function TripScreen() {
     return () => unsubscribe();
   }, []);
 
+  // Load offline packs on mount and when destinations change
+  useEffect(() => {
+    loadOfflinePacks();
+  }, [tripDestinations]);
+
+  // Reload offline packs when screen comes into focus
+  // This ensures the offline button appears after downloading maps
+  useFocusEffect(
+    useCallback(() => {
+      loadOfflinePacks();
+    }, [])
+  );
+
+  const loadOfflinePacks = async () => {
+    try {
+      const packs = await offlineMapService.getOfflinePacks();
+      setOfflinePacks(packs);
+    } catch (error) {
+      console.error('Error loading offline packs:', error);
+    }
+  };
+
+  const isOfflineMapAvailable = (destinationId: string): boolean => {
+    const packName = `destination-${destinationId}`;
+    return offlinePacks.some((pack) => pack.name === packName);
+  };
+
+  const getOfflinePack = (destinationId: string): OfflinePackInfo | null => {
+    const packName = `destination-${destinationId}`;
+    return offlinePacks.find((pack) => pack.name === packName) || null;
+  };
+
   const getPlacesSessionToken = () => {
     if (!placesSessionTokenRef.current) {
       placesSessionTokenRef.current = Math.random().toString(36).slice(2);
@@ -86,163 +122,6 @@ export default function TripScreen() {
     return placesSessionTokenRef.current;
   };
 
-  const sriLankaPlaces: {
-    name: string;
-    latitude: number;
-    longitude: number;
-    address?: string;
-    type?: TripDestination["type"];
-  }[] = [
-    // Outdoors
-    {
-      name: "Horton Plains National Park",
-      latitude: 6.8093,
-      longitude: 80.7998,
-      address: "Ohiya, Central Province",
-      type: "outdoors",
-    },
-    {
-      name: "Adam's Peak (Sri Pada)",
-      latitude: 6.8097,
-      longitude: 80.4993,
-      address: "Nallathanniya, Central Province",
-      type: "outdoors",
-    },
-    {
-      name: "Udawalawe National Park",
-      latitude: 6.4755,
-      longitude: 80.8737,
-      address: "Udawalawa, Sabaragamuwa Province",
-      type: "outdoors",
-    },
-    {
-      name: "Knuckles Mountain Range",
-      latitude: 7.4716,
-      longitude: 80.7916,
-      address: "Matale, Central Province",
-      type: "outdoors",
-    },
-
-    // Food
-    {
-      name: "Galle Face Green Street Food",
-      latitude: 6.9225,
-      longitude: 79.8442,
-      address: "Galle Face, Colombo 03",
-      type: "food",
-    },
-    {
-      name: "Ministry of Crab",
-      latitude: 6.9319,
-      longitude: 79.8428,
-      address: "Dutch Hospital, Colombo 01",
-      type: "food",
-    },
-    {
-      name: "Nuga Gama Village Restaurant",
-      latitude: 6.9158,
-      longitude: 79.857,
-      address: "Cinnamon Grand, Colombo 03",
-      type: "food",
-    },
-    {
-      name: "Upali's by Nawaloka",
-      latitude: 6.9115,
-      longitude: 79.8602,
-      address: "Colombo 07",
-      type: "food",
-    },
-
-    // Culture
-    {
-      name: "Temple of the Sacred Tooth Relic",
-      latitude: 7.2936,
-      longitude: 80.6413,
-      address: "Kandy, Central Province",
-      type: "culture",
-    },
-    {
-      name: "Galle Fort",
-      latitude: 6.0261,
-      longitude: 80.217,
-      address: "Galle, Southern Province",
-      type: "culture",
-    },
-    {
-      name: "Jaffna Public Library",
-      latitude: 9.6669,
-      longitude: 80.0094,
-      address: "Jaffna, Northern Province",
-      type: "culture",
-    },
-    {
-      name: "Colombo National Museum",
-      latitude: 6.9106,
-      longitude: 79.8608,
-      address: "Sir Marcus Fernando Mawatha, Colombo 07",
-      type: "culture",
-    },
-
-    // Water
-    {
-      name: "Mirissa Beach",
-      latitude: 5.9488,
-      longitude: 80.4546,
-      address: "Mirissa, Southern Province",
-      type: "water",
-    },
-    {
-      name: "Unawatuna Beach",
-      latitude: 6.0125,
-      longitude: 80.2496,
-      address: "Unawatuna, Southern Province",
-      type: "water",
-    },
-    {
-      name: "Nilaveli Beach",
-      latitude: 8.7207,
-      longitude: 81.1889,
-      address: "Nilaveli, Eastern Province",
-      type: "water",
-    },
-    {
-      name: "Bentota River Safari Jetty",
-      latitude: 6.4197,
-      longitude: 79.9979,
-      address: "Bentota, Southern Province",
-      type: "water",
-    },
-
-    // General safe areas
-    {
-      name: "Bandaranaike International Airport",
-      latitude: 7.1808,
-      longitude: 79.8841,
-      address: "Katunayake, Western Province",
-      type: "safe_area",
-    },
-    {
-      name: "Colombo Fort Railway Station",
-      latitude: 6.9344,
-      longitude: 79.8428,
-      address: "Colombo 01, Western Province",
-      type: "safe_area",
-    },
-    {
-      name: "Ella Town",
-      latitude: 6.8667,
-      longitude: 81.0467,
-      address: "Ella, Uva Province",
-      type: "safe_area",
-    },
-    {
-      name: "Anuradhapura Sacred City",
-      latitude: 8.335,
-      longitude: 80.4037,
-      address: "Anuradhapura, North Central Province",
-      type: "safe_area",
-    },
-  ];
 
   const getDestinationIcon = (type: string) => {
     switch (type) {
@@ -390,7 +269,12 @@ export default function TripScreen() {
     setShowMapPicker(false);
   };
 
-  const handleOpenInMaps = (item: TripDestination) => {
+  const handleOpenOfflineMap = (item: TripDestination) => {
+    setSelectedOfflineDestination(item);
+    setShowOfflineMapModal(true);
+  };
+
+  const handleOpenInGoogleMaps = (item: TripDestination) => {
     const url =
       Platform.select({
         ios: `maps:0,0?q=${encodeURIComponent(item.name)}@${item.location.latitude},${item.location.longitude}`,
@@ -403,20 +287,13 @@ export default function TripScreen() {
 
   const fetchNearbyPlaces = async (
     origin: TripDestination,
-    pageToken?: string,
-    fallback: PlaceSuggestion[] = []
+    pageToken?: string
   ) => {
-    // If offline, use cached data or fallback immediately
+    // If offline, use cached data immediately
     if (!isOnline) {
       const cached = tripNearbyCache[origin.id] || [];
       if (cached.length > 0) {
         setExploreResults(cached);
-        setExploreNextPageToken(null);
-        return;
-      }
-      if (fallback.length > 0) {
-        setExploreResults(fallback);
-        setNearbyPlacesForDestination(origin.id, fallback as NearbyPlace[]);
         setExploreNextPageToken(null);
         return;
       }
@@ -483,21 +360,9 @@ export default function TripScreen() {
           return nextList;
         });
         setExploreNextPageToken(data.next_page_token || null);
-      } else if (!pageToken && fallback.length > 0) {
-        setExploreResults(() => {
-          setNearbyPlacesForDestination(origin.id, fallback as NearbyPlace[]);
-          return fallback;
-        });
-        setExploreNextPageToken(null);
       }
     } catch (e) {
-      if (!pageToken && fallback.length > 0) {
-        setExploreResults(() => {
-          setNearbyPlacesForDestination(origin.id, fallback as NearbyPlace[]);
-          return fallback;
-        });
-        setExploreNextPageToken(null);
-      }
+      console.error('Error fetching nearby places:', e);
     } finally {
       if (pageToken) {
         setExploreMoreLoading(false);
@@ -516,27 +381,19 @@ export default function TripScreen() {
     setExploreNextPageToken(null);
     setShowExploreModal(true);
 
-    const fallback: PlaceSuggestion[] = sriLankaPlaces
-      .filter((p) => p.type === item.type && p.name !== item.name)
-      .map((p) => ({
-        name: p.name,
-        latitude: p.latitude,
-        longitude: p.longitude,
-        address: p.address,
-        type: p.type,
-        id: `${p.name}-${p.latitude}-${p.longitude}`,
-      }));
-
     if (!googlePlacesKey) {
-      setExploreResults((prev) => (prev.length ? prev : fallback));
-      if (!cached.length) {
-        setNearbyPlacesForDestination(item.id, fallback as NearbyPlace[]);
-      }
+      setExploreResults(cached);
       setExploreLoading(false);
+      if (!cached.length) {
+        Alert.alert(
+          "Google Places API Required",
+          "Please add your Google Places API key in the .env file to search for nearby places."
+        );
+      }
       return;
     }
 
-    await fetchNearbyPlaces(item, undefined, cached.length ? cached : fallback);
+    await fetchNearbyPlaces(item);
   };
 
   const handleDeleteDestination = (id: string) => {
@@ -561,16 +418,7 @@ export default function TripScreen() {
 
   const normalizedQuery = searchQuery.replace(/\s+/g, " ").trim();
 
-  const matchingPlaces: PlaceSuggestion[] =
-    normalizedQuery.length === 0
-      ? []
-      : sriLankaPlaces.filter((place) =>
-          place.name.toLowerCase().includes(normalizedQuery.toLowerCase())
-        );
-  const suggestionPlaces: PlaceSuggestion[] =
-    googlePlacesKey && searchResults.length > 0
-      ? searchResults
-      : matchingPlaces.slice(0, 8);
+  const suggestionPlaces: PlaceSuggestion[] = searchResults;
 
   const destinations = tripDestinations;
 
@@ -675,89 +523,11 @@ export default function TripScreen() {
     return () => controller.abort();
   }, [searchQuery, googlePlacesKey]);
 
-  const SwipeableCard = ({
-    children,
-    onDelete,
-    enabled,
-  }: {
-    children: React.ReactNode;
-    onDelete?: () => void;
-    enabled: boolean;
-  }) => {
-    const translateX = React.useRef(new Animated.Value(0)).current;
-    const [open, setOpen] = useState(false);
-    const ACTION_WIDTH = 96;
-
-    const panResponder = React.useRef(
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_, gestureState) =>
-          Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
-        onPanResponderMove: (_, { dx }) => {
-          if (!enabled) return;
-          if (dx < 0) {
-            translateX.setValue(Math.max(dx, -ACTION_WIDTH));
-          }
-        },
-        onPanResponderRelease: (_, { dx }) => {
-          if (!enabled) return;
-          if (dx < -40) {
-            Animated.timing(translateX, {
-              toValue: -ACTION_WIDTH,
-              duration: 150,
-              useNativeDriver: true,
-            }).start(() => setOpen(true));
-          } else {
-            Animated.timing(translateX, {
-              toValue: 0,
-              duration: 150,
-              useNativeDriver: true,
-            }).start(() => setOpen(false));
-          }
-        },
-        onPanResponderTerminate: () => {
-          Animated.timing(translateX, {
-            toValue: 0,
-            duration: 150,
-            useNativeDriver: true,
-          }).start(() => setOpen(false));
-        },
-      })
-    ).current;
+  const renderDestinationItem = ({ item }: { item: TripDestination }) => {
+    const hasOfflineMap = isOfflineMapAvailable(item.id);
 
     return (
-      <View className="mb-3">
-        <View className="absolute right-0 top-0 bottom-0 w-24 items-center justify-center">
-          {enabled && (
-            <Pressable
-              onPress={() => {
-                onDelete?.();
-                setOpen(false);
-                translateX.setValue(0);
-              }}
-              className="bg-red-600 active:bg-red-700 w-full h-full items-center justify-center rounded-r-lg"
-            >
-              <Ionicons name="trash" size={20} color="#fff" />
-            </Pressable>
-          )}
-        </View>
-        <Animated.View
-          style={{
-            transform: [{ translateX }],
-          }}
-          {...panResponder.panHandlers}
-        >
-          {children}
-        </Animated.View>
-      </View>
-    );
-  };
-
-  const renderDestinationItem = ({ item }: { item: TripDestination }) => (
-    <SwipeableCard
-      enabled={!item.isPreloaded}
-      onDelete={() => handleDeleteDestination(item.id)}
-    >
-      <View className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+      <View className="mb-3 bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
         <View className="flex-row items-start space-x-3">
           <View
             className="w-12 h-12 rounded-full items-center justify-center"
@@ -775,51 +545,86 @@ export default function TripScreen() {
               <Text className="text-base font-medium text-gray-900 dark:text-white flex-1 pr-2">
                 {item.name}
               </Text>
-              <View
-                className="px-2 py-1 rounded"
-                style={{ backgroundColor: getDestinationColor(item.type) + "20" }}
-              >
-                <Text
-                  className="text-xs font-medium capitalize"
-                  style={{ color: getDestinationColor(item.type) }}
+              <View className="flex-row items-center space-x-2">
+                {hasOfflineMap && (
+                  <View className="px-2 py-1 rounded bg-green-100 dark:bg-green-900/30">
+                    <View className="flex-row items-center space-x-1">
+                      <Ionicons name="cloud-done" size={12} color="#10b981" />
+                      <Text className="text-[10px] font-semibold text-green-700 dark:text-green-300">
+                        Offline
+                      </Text>
+                    </View>
+                  </View>
+                )}
+                <View
+                  className="px-2 py-1 rounded"
+                  style={{ backgroundColor: getDestinationColor(item.type) + "20" }}
                 >
-                  {item.type.replace("_", " ")}
-                </Text>
+                  <Text
+                    className="text-xs font-medium capitalize"
+                    style={{ color: getDestinationColor(item.type) }}
+                  >
+                    {item.type.replace("_", " ")}
+                  </Text>
+                </View>
               </View>
             </View>
 
             {item.location.address && (
-              <Text className="text-gray-600 dark:text-gray-300 mb-2">
+              <Text className="text-sm text-gray-600 dark:text-gray-300 mb-2">
                 {item.location.address}
               </Text>
             )}
 
-            <View className="flex-row items-center justify-end space-x-5">
-              <Pressable
-                onPress={() => handleOpenInMaps(item)}
-                className="flex-row items-center space-x-1"
-              >
-                <Ionicons name="map" size={16} color="#2563eb" />
-                <Text className="text-xs font-semibold text-blue-600 dark:text-blue-400">
-                  View
-                </Text>
-              </Pressable>
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center space-x-3">
+                {hasOfflineMap && (
+                  <Pressable
+                    onPress={() => handleOpenOfflineMap(item)}
+                    className="flex-row items-center space-x-1"
+                  >
+                    <Ionicons name="cloud-done" size={16} color="#10b981" />
+                    <Text className="text-xs font-semibold text-green-600 dark:text-green-400">
+                      Offline
+                    </Text>
+                  </Pressable>
+                )}
 
-              <Pressable
-                onPress={() => handleExploreNearby(item)}
-                className="flex-row items-center space-x-1"
-              >
-                <Ionicons name="compass" size={16} color="#10b981" />
-                <Text className="text-xs font-semibold text-green-600 dark:text-green-400">
-                  Explore
-                </Text>
-              </Pressable>
+                <Pressable
+                  onPress={() => handleOpenInGoogleMaps(item)}
+                  className="flex-row items-center space-x-1"
+                >
+                  <Ionicons name="map" size={16} color="#2563eb" />
+                  <Text className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                    Maps
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => handleExploreNearby(item)}
+                  className="flex-row items-center space-x-1"
+                >
+                  <Ionicons name="compass" size={16} color="#10b981" />
+                  <Text className="text-xs font-semibold text-green-600 dark:text-green-400">
+                    Explore
+                  </Text>
+                </Pressable>
+              </View>
+
+              {!item.isPreloaded && (
+                <Pressable
+                  onPress={() => handleDeleteDestination(item.id)}
+                  className="p-2 -mr-2"
+                >
+                  <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                </Pressable>
+              )}
             </View>
           </View>
         </View>
       </View>
-    </SwipeableCard>
-  );
+    );
+  };
 
   return (
     <View className="flex-1 bg-gray-50 dark:bg-gray-900">
@@ -828,9 +633,9 @@ export default function TripScreen() {
         contentContainerStyle={{ paddingBottom: 32, flexGrow: 1 }}
       >
         <View className="p-4 flex-1">
-          {/* Add Destination Section */}
-          <View className="mb-6">
-            <View className="items-center mb-4">
+          {/* Header with Offline Maps Button */}
+          <View className="mb-4">
+            <View className="flex-row items-center justify-between mb-2">
               <View className="flex-row items-center space-x-2">
                 <Text className="text-2xl font-bold text-gray-900 dark:text-white">
                   Where to?
@@ -846,12 +651,25 @@ export default function TripScreen() {
                   </View>
                 )}
               </View>
-              <Text className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                {isOnline
-                  ? "Places to go, things to do, hotels..."
-                  : "Showing cached places and offline destinations"}
-              </Text>
+              <Pressable
+                onPress={() => router.push("/offline-maps")}
+                className="flex-row items-center space-x-1 px-3 py-2 rounded-lg bg-blue-600 active:bg-blue-700"
+              >
+                <Ionicons name="cloud-download-outline" size={18} color="#ffffff" />
+                <Text className="text-xs font-semibold text-white">
+                  Offline Maps
+                </Text>
+              </Pressable>
             </View>
+            <Text className="text-sm text-gray-500 dark:text-gray-400">
+              {isOnline
+                ? "Places to go, things to do, hotels..."
+                : "Showing cached places and offline destinations"}
+            </Text>
+          </View>
+
+          {/* Add Destination Section */}
+          <View className="mb-6">
 
             <View className="bg-white dark:bg-gray-800 rounded-lg p-4 space-y-4 border border-gray-200 dark:border-gray-700 shadow-sm">
               <View>
@@ -894,7 +712,7 @@ export default function TripScreen() {
                 >
                   <Ionicons name="map" size={18} color="#16a34a" />
                   <Text className="ml-2 text-sm font-semibold text-green-700 dark:text-green-200">
-                    Pick on Google Maps
+                    Pick on Maps
                   </Text>
                 </Pressable>
                 {showSuggestions && searchQuery.trim().length > 0 && (
@@ -909,9 +727,9 @@ export default function TripScreen() {
                         </Text>
                       </View>
                     ) : suggestionPlaces.length > 0 ? (
-                      suggestionPlaces.map((item) => (
+                      suggestionPlaces.map((item, index) => (
                         <Pressable
-                          key={item.name}
+                          key={item.placeId || item.id || `${item.name}-${index}`}
                           onPress={() => handleSelectPlace(item)}
                           className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 last:border-b-0 active:bg-gray-50 dark:active:bg-gray-700"
                         >
@@ -1353,41 +1171,29 @@ export default function TripScreen() {
               </Pressable>
             </View>
 
-            <MapView
-              provider={supportsGoogleMapsProvider ? PROVIDER_GOOGLE : undefined}
-              style={{ flex: 1 }}
-              googleMapsApiKey={googlePlacesKey || undefined}
-              initialRegion={{
-                latitude: 7.8731,
-                longitude: 80.7718,
-                latitudeDelta: 3,
-                longitudeDelta: 3,
-              }}
-              onPress={(e: MapPressEvent) =>
-                setMapSelected(e.nativeEvent.coordinate)
+            <MapboxMap
+              initialLatitude={7.8731}
+              initialLongitude={80.7718}
+              initialZoom={7}
+              onMapPress={(coordinate) => setMapSelected(coordinate)}
+              markers={
+                mapSelected
+                  ? [
+                      {
+                        id: 'selected-location',
+                        latitude: mapSelected.latitude,
+                        longitude: mapSelected.longitude,
+                        color: '#ef4444',
+                        title: mapPlaceName || 'Selected Location',
+                      },
+                    ]
+                  : []
               }
-            >
-              {mapSelected && (
-                <Marker coordinate={mapSelected} />
-              )}
-            </MapView>
+              style={{ flex: 1 }}
+              showUserLocation={true}
+            />
 
             <View className="px-4 py-3 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
-              {!supportsGoogleMapsProvider && (
-                <View className="mb-3 bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 rounded-lg p-3">
-                  <View className="flex-row items-start space-x-2">
-                    <Ionicons name="warning" size={16} color="#f97316" />
-                    <View className="flex-1">
-                      <Text className="text-xs font-semibold text-orange-800 dark:text-orange-200 mb-1">
-                        Limited in Expo Go
-                      </Text>
-                      <Text className="text-[10px] text-orange-700 dark:text-orange-300">
-                        Maps may not render properly in Expo Go. Build a development build for full functionality (see README).
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              )}
               <Text className="text-sm text-gray-600 dark:text-gray-300 mb-1">
                 Tap on the map to drop a pin, then name it.
               </Text>
@@ -1408,6 +1214,89 @@ export default function TripScreen() {
                 <Text className="text-white font-semibold">Add destination</Text>
               </Pressable>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Offline Map Viewer Modal */}
+      <Modal
+        visible={showOfflineMapModal}
+        animationType="slide"
+        onRequestClose={() => setShowOfflineMapModal(false)}
+      >
+        <View className="flex-1 bg-white dark:bg-gray-900">
+          {/* Header */}
+          <View className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex-row items-center justify-between">
+            <View className="flex-row items-center space-x-2">
+              <Ionicons name="cloud-done" size={24} color="#10b981" />
+              <View>
+                <Text className="text-lg font-bold text-gray-900 dark:text-white">
+                  {selectedOfflineDestination?.name || 'Offline Map'}
+                </Text>
+                <View className="flex-row items-center space-x-1">
+                  <Ionicons name="checkmark-circle" size={12} color="#10b981" />
+                  <Text className="text-xs text-green-600 dark:text-green-400 font-medium">
+                    Available Offline
+                  </Text>
+                </View>
+              </View>
+            </View>
+            <Pressable onPress={() => setShowOfflineMapModal(false)} className="p-2">
+              <Ionicons name="close" size={24} color="#6b7280" />
+            </Pressable>
+          </View>
+
+          {/* Map View */}
+          {selectedOfflineDestination && (() => {
+            const pack = getOfflinePack(selectedOfflineDestination.id);
+            const centerLat = selectedOfflineDestination.location.latitude;
+            const centerLon = selectedOfflineDestination.location.longitude;
+
+            return (
+              <MapboxMap
+                initialLatitude={centerLat}
+                initialLongitude={centerLon}
+                initialZoom={pack ? pack.minZoom + 2 : 12}
+                style={{ flex: 1 }}
+                showUserLocation={true}
+                markers={[
+                  {
+                    id: 'destination',
+                    latitude: centerLat,
+                    longitude: centerLon,
+                    color: '#3b82f6',
+                    title: selectedOfflineDestination.name,
+                  },
+                ]}
+              />
+            );
+          })()}
+
+          {/* Map Info Footer */}
+          <View className="px-4 py-3 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+            <View className="flex-row items-center justify-between mb-2">
+              <View>
+                <Text className="text-sm font-semibold text-gray-900 dark:text-white">
+                  Offline Map Area
+                </Text>
+                {selectedOfflineDestination && (() => {
+                  const pack = getOfflinePack(selectedOfflineDestination.id);
+                  return pack ? (
+                    <Text className="text-xs text-gray-600 dark:text-gray-400">
+                      {(pack.downloadedBytes / (1024 * 1024)).toFixed(2)} MB • Zoom {pack.minZoom}-{pack.maxZoom}
+                    </Text>
+                  ) : null;
+                })()}
+              </View>
+              <View className="px-3 py-1 rounded-full bg-green-100 dark:bg-green-900/30">
+                <Text className="text-xs font-semibold text-green-700 dark:text-green-300">
+                  No Internet Required
+                </Text>
+              </View>
+            </View>
+            <Text className="text-xs text-gray-500 dark:text-gray-400">
+              This map is stored on your device and works without internet connection.
+            </Text>
           </View>
         </View>
       </Modal>

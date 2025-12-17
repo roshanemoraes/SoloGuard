@@ -66,6 +66,17 @@ export default function HomeScreen() {
     };
   }, [settings.updateInterval, updateBatteryStatus]);
 
+  // Auto-dismiss SOS result popup after 5 seconds
+  useEffect(() => {
+    if (sosResult) {
+      const timer = setTimeout(() => {
+        setSosResult(null);
+      }, 5000); // 5 seconds
+
+      return () => clearTimeout(timer);
+    }
+  }, [sosResult]);
+
   const initializeMonitoring = async () => {
     try {
       await monitoringService.startMonitoring();

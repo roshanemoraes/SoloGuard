@@ -107,10 +107,12 @@ export class SMSService {
         throw new Error('SMS is not available on this device');
       }
 
-      const message = '🚨 SafeGuard Test Message 🚨\n\nThis is a test message from SafeGuard to verify SMS functionality.';
-      
+      const message = ' SafeGuard Test Message \n\nThis is a test message from SafeGuard to verify SMS functionality.';
+
       const result = await SMS.sendSMSAsync([phoneNumber], message);
-      return result.result === 'sent';
+      // Treat both 'sent' and 'unknown' as success (composer opened)
+      // Only 'cancelled' is a failure (user dismissed the composer)
+      return result.result === 'sent' || result.result === 'unknown';
     } catch (error) {
       console.error('Error sending test message:', error);
       return false;
@@ -197,9 +199,14 @@ export class SMSService {
     const sentTo: string[] = [];
     const failed: string[] = [];
 
-    if (result.result === 'sent') {
+    // SMS.sendSMSAsync opens the native messaging app
+    // result.result can be 'sent' (rare, only on some devices) or 'unknown' (most common)
+    // 'unknown' means the composer was opened - user still needs to tap send
+    // We treat both 'sent' and 'unknown' as success since the composer opened
+    if (result.result === 'sent' || result.result === 'unknown') {
       sentTo.push(...phoneNumbers);
     } else {
+      // Only 'cancelled' is a true failure (user dismissed the composer)
       failed.push(...phoneNumbers);
     }
 
@@ -224,7 +231,8 @@ export class SMSService {
       const sentTo: string[] = [];
       const failed: string[] = [];
 
-      if (result.result === 'sent') {
+      // Same logic as sendViaSMS - treat 'sent' and 'unknown' as success
+      if (result.result === 'sent' || result.result === 'unknown') {
         sentTo.push(...phoneNumbers);
       } else {
         failed.push(...phoneNumbers);

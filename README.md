@@ -10,6 +10,7 @@ Solo travel in Sri Lanka is popular but risky: accidents in remote areas, unnoti
 - **Abnormal inactivity detection**: Prompts on prolonged inactivity; can auto-trigger alerts.
 - **Low-battery alerts**: Sends last-known location when power is critical.
 - **Trip planning**: Search/add destinations (Google Places) with autocomplete; view and manage trip list; nearby exploration and map picker.
+- **Offline maps**: Download maps with Mapbox for offline access; includes roads, places, and terrain data for areas around destinations.
 - **Offline resilience**: Caches planned destinations and key safety info for poor connectivity scenarios.
 - **Safety tips & emergency info**: Quick access to guidance and important contacts.
 - **Localization**: English and Sinhala (Tamil planned); language selector in Setup.
@@ -29,9 +30,10 @@ Solo travel in Sri Lanka is popular but risky: accidents in remote areas, unnoti
 
 ## Prerequisites
 - Node.js and npm
-- Expo Go app on your phone (SDK 50)
+- Expo Go app on your phone (SDK 50) or development build for full features
 - Phone and development machine on the same Wi-Fi network
-- Google Places API key (for search/autocomplete and map picker)
+- Google Places API key (for search/autocomplete)
+- Mapbox access token (for maps and offline storage) - **See MAPBOX_SETUP.md**
 
 ## Setup
 1) Clone and install
@@ -44,7 +46,9 @@ npm install
 - Create `.env` with:
 ```
 EXPO_PUBLIC_GOOGLE_PLACES_KEY=your_google_places_api_key
+EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN=your_mapbox_access_token
 ```
+- **For Mapbox setup instructions**, see [MAPBOX_SETUP.md](MAPBOX_SETUP.md)
 3) Start Expo (clean cache)
 ```bash
 npx expo start -c
@@ -63,7 +67,7 @@ npx expo start -c
 
 ## Building Development APK
 
-The map picker feature requires native Google Maps SDK, which doesn't work in Expo Go. You have two options to build a development APK:
+The map features require native SDKs (Mapbox for maps, Google for search), which don't work in Expo Go. You have two options to build a development APK:
 
 ### Option 1: Using EAS Build (Cloud)
 
@@ -77,11 +81,12 @@ The map picker feature requires native Google Maps SDK, which doesn't work in Ex
    eas login
    ```
 
-3. **Set API Key as EAS Environment Variable**
+3. **Set API Keys as EAS Environment Variables**
    - Go to your project settings on expo.dev
-   - Add environment variable: `EXPO_PUBLIC_GOOGLE_PLACES_KEY`
-   - Set visibility to "Sensitive" (not "Secret" - EXPO_PUBLIC_ vars can't be secret)
-   - Set value to your Google Places API key
+   - Add these environment variables:
+     - `EXPO_PUBLIC_GOOGLE_PLACES_KEY` - Your Google Places API key
+     - `EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN` - Your Mapbox access token
+   - Set visibility to "Sensitive" for both (not "Secret" - EXPO_PUBLIC_ vars can't be secret)
 
 4. **Build for Android**
    ```bash
