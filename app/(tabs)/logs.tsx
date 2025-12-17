@@ -9,7 +9,6 @@ import {
   LayoutAnimation,
   UIManager,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
@@ -230,8 +229,7 @@ export default function LogsScreen() {
 
   /** ---- UI ---- */
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }} edges={['top']}>
-      <View style={{ flex: 1, backgroundColor: '#f9fafb' }} className="dark:bg-gray-900">
+    <View className="flex-1 bg-gray-50 dark:bg-gray-900">
       {/* Header */}
       <View className="bg-white dark:bg-gray-800 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
         <View className="flex-row items-center justify-between">
@@ -466,8 +464,7 @@ export default function LogsScreen() {
           </View>
         </ScrollView>
       )}
-      </View>
-    </SafeAreaView>
+    </View>
   );
 }
 

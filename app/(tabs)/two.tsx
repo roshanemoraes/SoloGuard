@@ -8,7 +8,6 @@ import {
   Modal,
   FlatList,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppStore } from "../../src/stores/useAppStore";
 import { useI18n } from "../../src/stores/useI18n";
@@ -216,8 +215,7 @@ export default function TabTwoScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }} edges={['top']}>
-      <View style={{ flex: 1, backgroundColor: '#f9fafb' }} className="dark:bg-gray-900">
+    <View className="flex-1 bg-gray-50 dark:bg-gray-900">
       <ScrollView className="flex-1">
         <View className="p-4 space-y-4">
           {toast && (
@@ -400,5 +398,5 @@ export default function TabTwoScreen() {
         onSelect={(v) => setProfileCountryCode(v)}
       />
     </View>
-  </SafeAreaView>
-  );}
+  );
+}
