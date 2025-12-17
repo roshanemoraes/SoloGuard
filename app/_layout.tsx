@@ -12,6 +12,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import "../global.css";
 
 import { useColorScheme } from "@/components/useColorScheme";
+import { initializeMapbox } from "@/src/config/mapbox";
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -31,6 +32,11 @@ export default function RootLayout() {
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
     ...FontAwesome.font,
   });
+
+  // Initialize Mapbox as early as possible
+  useEffect(() => {
+    initializeMapbox();
+  }, []);
 
   // Expo Router uses Error Boundaries to catch errors in the navigation tree.
   useEffect(() => {
