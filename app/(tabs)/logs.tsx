@@ -358,13 +358,13 @@ export default function LogsScreen() {
 
       {/* List */}
       {merged.length === 0 ? (
-        <View className="flex-1 items-center justify-center px-4">
+        <View className="flex-1 items-center justify-center px-4 bg-gray-50 dark:bg-gray-900">
           <Ionicons name="document-text-outline" size={64} color="#9ca3af" />
           <Text className="text-xl font-medium text-gray-900 dark:text-white mt-4 mb-2">{t("noLogsYet")}</Text>
           <Text className="text-center text-gray-500 dark:text-gray-400">{t("logsHint")}</Text>
         </View>
       ) : (
-        <ScrollView className="flex-1">
+        <ScrollView className="flex-1 bg-gray-50 dark:bg-gray-900">
           <View className="p-4 space-y-3">
             {filtered.slice().reverse().map((log) => {
               const { date, time } = fmt(log.timestamp);
