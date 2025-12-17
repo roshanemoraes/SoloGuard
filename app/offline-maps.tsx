@@ -9,6 +9,7 @@ import {
   Switch,
   Modal,
   TouchableWithoutFeedback,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../src/stores/useAppStore';
@@ -25,16 +26,20 @@ export default function OfflineMapsScreen() {
   const [loading, setLoading] = useState(true);
   const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
   const [storageSize, setStorageSize] = useState(0);
   const [autoDownload, setAutoDownload] = useState(false);
   const [downloadRadius, setDownloadRadius] = useState(5); // km
   const [showMapViewer, setShowMapViewer] = useState(false);
   const [selectedMapPack, setSelectedMapPack] = useState<OfflinePackInfo | null>(null);
+  const [pulseAnim] = useState(new Animated.Value(1));
 
   // Confirmation modals
   const [showDownloadAllConfirm, setShowDownloadAllConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const [packToDelete, setPackToDelete] = useState<string | null>(null);
 
   useEffect(() => {
@@ -49,6 +54,28 @@ export default function OfflineMapsScreen() {
     }, 3000);
 
     return () => clearInterval(interval);
+  }, [isDownloading]);
+
+  // Pulsing animation effect while downloading
+  useEffect(() => {
+    if (isDownloading) {
+      const animation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      animation.start();
+      return () => animation.stop();
+    }
   }, [isDownloading]);
 
   const loadOfflinePacks = async () => {
@@ -77,6 +104,17 @@ export default function OfflineMapsScreen() {
 
   const confirmDownloadAll = async () => {
     setShowDownloadAllConfirm(false);
+
+    // Check if this is the first download (no existing packs)
+    const isFirstDownload = offlinePacks.length === 0;
+
+    if (isFirstDownload) {
+      setIsInitializing(true);
+      // Add a small delay to show initialization message
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setIsInitializing(false);
+    }
+
     setIsDownloading(true);
     try {
       await offlineMapService.downloadRegionsForDestinations(
@@ -90,9 +128,10 @@ export default function OfflineMapsScreen() {
         }
       );
 
-      Alert.alert('Success', 'Offline maps downloaded successfully!');
       await loadOfflinePacks();
       await loadStorageSize();
+      setSuccessMessage('All offline maps downloaded successfully!');
+      setShowSuccessModal(true);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to download offline maps. Please try again.';
       Alert.alert('Download Error', errorMessage);
@@ -113,6 +152,16 @@ export default function OfflineMapsScreen() {
         return;
       }
 
+      // Check if this is the first download
+      const isFirstDownload = offlinePacks.length === 0;
+
+      if (isFirstDownload) {
+        setIsInitializing(true);
+        // Add a small delay to show initialization message
+        await new Promise(resolve => setTimeout(resolve, 500));
+        setIsInitializing(false);
+      }
+
       setIsDownloading(true);
       await offlineMapService.downloadOfflineRegion(
         packName,
@@ -126,9 +175,10 @@ export default function OfflineMapsScreen() {
         }
       );
 
-      Alert.alert('Success', `Offline map for "${destination.name}" downloaded!`);
       await loadOfflinePacks();
       await loadStorageSize();
+      setSuccessMessage(`Offline map for "${destination.name}" downloaded successfully!`);
+      setShowSuccessModal(true);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to download offline map. Please try again.';
       Alert.alert('Download Error', errorMessage);
@@ -153,9 +203,10 @@ export default function OfflineMapsScreen() {
     setShowDeleteConfirm(false);
     try {
       await offlineMapService.deleteOfflinePack(packToDelete);
-      Alert.alert('Deleted', 'Offline map deleted successfully.');
       await loadOfflinePacks();
       await loadStorageSize();
+      setSuccessMessage('Offline map deleted successfully.');
+      setShowSuccessModal(true);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to delete offline map.';
       Alert.alert('Delete Error', errorMessage);
@@ -173,9 +224,10 @@ export default function OfflineMapsScreen() {
     setShowDeleteAllConfirm(false);
     try {
       await offlineMapService.deleteAllPacks();
-      Alert.alert('Success', 'All offline maps deleted successfully.');
       await loadOfflinePacks();
       await loadStorageSize();
+      setSuccessMessage('All offline maps deleted successfully.');
+      setShowSuccessModal(true);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to delete offline maps.';
       Alert.alert('Delete Error', errorMessage);
@@ -337,30 +389,51 @@ export default function OfflineMapsScreen() {
         </View>
       </View>
 
+      {/* Initialization Message */}
+      {isInitializing && (
+        <View className="mx-4 mt-4 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+          <View className="flex-row items-center space-x-3">
+            <ActivityIndicator size="small" color="#2563eb" />
+            <View className="flex-1">
+              <Text className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                Initializing Offline Maps...
+              </Text>
+              <Text className="text-xs text-blue-700 dark:text-blue-300">
+                Preparing map data for first download. This only happens once.
+              </Text>
+            </View>
+          </View>
+        </View>
+      )}
+
       {/* Action Buttons */}
       <View className="px-4 py-4 border-b border-gray-200 dark:border-gray-800">
         <Pressable
           onPress={handleDownloadAll}
-          disabled={isDownloading || tripDestinations.length === 0}
+          disabled={isDownloading || isInitializing || tripDestinations.length === 0}
           className={`flex-row items-center justify-center py-3 px-4 rounded-lg mb-2 ${
-            isDownloading || tripDestinations.length === 0
+            isDownloading || isInitializing || tripDestinations.length === 0
               ? 'bg-gray-300 dark:bg-gray-700'
               : 'bg-blue-600'
           }`}
         >
-          <Ionicons
-            name="download-outline"
-            size={20}
-            color={isDownloading || tripDestinations.length === 0 ? '#9ca3af' : '#ffffff'}
-          />
+          {isDownloading ? (
+            <ActivityIndicator size="small" color="#9ca3af" />
+          ) : (
+            <Ionicons
+              name="download-outline"
+              size={20}
+              color={isInitializing || tripDestinations.length === 0 ? '#9ca3af' : '#ffffff'}
+            />
+          )}
           <Text
             className={`ml-2 font-semibold ${
-              isDownloading || tripDestinations.length === 0
+              isDownloading || isInitializing || tripDestinations.length === 0
                 ? 'text-gray-500 dark:text-gray-400'
                 : 'text-white'
             }`}
           >
-            {isDownloading ? 'Downloading...' : 'Download All Destinations'}
+            {isInitializing ? 'Initializing...' : isDownloading ? 'Downloading...' : 'Download All Destinations'}
           </Text>
         </Pressable>
 
@@ -411,14 +484,20 @@ export default function OfflineMapsScreen() {
                   {progress !== undefined && progress < 1 && (
                     <View className="mt-2">
                       <View className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                        <View
+                        <Animated.View
                           className="h-full bg-blue-600"
-                          style={{ width: `${progress * 100}%` }}
+                          style={{
+                            width: `${progress * 100}%`,
+                            transform: [{ scaleY: pulseAnim }]
+                          }}
                         />
                       </View>
-                      <Text className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                        {Math.round(progress * 100)}% downloaded
-                      </Text>
+                      <View className="flex-row items-center justify-between mt-1">
+                        <Text className="text-xs text-gray-600 dark:text-gray-400">
+                          {Math.round(progress * 100)}% downloaded
+                        </Text>
+                        <ActivityIndicator size="small" color="#2563eb" />
+                      </View>
                     </View>
                   )}
                 </View>
@@ -433,14 +512,14 @@ export default function OfflineMapsScreen() {
                 ) : (
                   <Pressable
                     onPress={() => handleDownloadSingle(destination)}
-                    disabled={isDownloading}
+                    disabled={isDownloading || isInitializing}
                     className={`py-2 px-3 rounded-lg ${
-                      isDownloading ? 'bg-gray-300 dark:bg-gray-700' : 'bg-blue-600'
+                      isDownloading || isInitializing ? 'bg-gray-300 dark:bg-gray-700' : 'bg-blue-600'
                     }`}
                   >
                     <Text
                       className={`text-xs font-semibold ${
-                        isDownloading ? 'text-gray-500' : 'text-white'
+                        isDownloading || isInitializing ? 'text-gray-500' : 'text-white'
                       }`}
                     >
                       Download
@@ -454,13 +533,13 @@ export default function OfflineMapsScreen() {
       </View>
 
       {/* Downloaded Packs */}
-      {offlinePacks.length > 0 && (
+      {offlinePacks.filter(pack => pack.state === 'complete' && pack.progress >= 100).length > 0 && (
         <View className="px-4 py-4 border-t border-gray-200 dark:border-gray-800">
           <Text className="text-base font-semibold text-gray-900 dark:text-white mb-3">
-            Downloaded Maps ({offlinePacks.length})
+            Downloaded Maps ({offlinePacks.filter(pack => pack.state === 'complete' && pack.progress >= 100).length})
           </Text>
 
-          {offlinePacks.map((pack) => (
+          {offlinePacks.filter(pack => pack.state === 'complete' && pack.progress >= 100).map((pack) => (
             <View
               key={pack.name}
               className="flex-row items-center justify-between py-3 border-b border-gray-200 dark:border-gray-800"
@@ -706,6 +785,45 @@ export default function OfflineMapsScreen() {
               <Text className="text-white font-semibold">Delete All</Text>
             </Pressable>
           </View>
+        </View>
+      </Modal>
+
+      {/* Success Modal */}
+      <Modal
+        visible={showSuccessModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSuccessModal(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowSuccessModal(false)}>
+          <View className="flex-1 bg-black/40" />
+        </TouchableWithoutFeedback>
+        <View
+          className="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-2xl border border-gray-200 dark:border-gray-700"
+          style={{ position: "absolute", left: 16, right: 16, top: "30%" }}
+        >
+          <View className="flex-row items-center justify-between mb-3">
+            <View className="flex-row items-center space-x-2">
+              <View className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/50 items-center justify-center">
+                <Ionicons name="checkmark-circle" size={26} color="#10b981" />
+              </View>
+              <Text className="text-lg font-bold text-gray-900 dark:text-white">
+                Success
+              </Text>
+            </View>
+            <Pressable onPress={() => setShowSuccessModal(false)}>
+              <Ionicons name="close" size={22} color="#6b7280" />
+            </Pressable>
+          </View>
+          <Text className="text-sm text-gray-700 dark:text-gray-300 mb-4">
+            {successMessage}
+          </Text>
+          <Pressable
+            onPress={() => setShowSuccessModal(false)}
+            className="bg-green-600 active:bg-green-700 rounded-lg py-3 items-center"
+          >
+            <Text className="text-white font-semibold">OK</Text>
+          </Pressable>
         </View>
       </Modal>
     </View>
