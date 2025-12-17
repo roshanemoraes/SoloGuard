@@ -1,0 +1,1466 @@
+================================================================================
+                    SOLOGUARD SAFETY APPLICATION
+                  COMPREHENSIVE TECHNICAL REPORT
+================================================================================
+
+EXECUTIVE SUMMARY
+================================================================================
+
+SoloGuard is a mobile safety companion application designed for solo travelers
+in Sri Lanka. Built with React Native and Expo, it provides comprehensive
+safety monitoring through location tracking, battery monitoring, activity
+detection, emergency SOS functionality, offline maps, and trip planning.
+
+The application operates as a client-only solution with local data storage
+and SMS-based emergency communication, ensuring privacy and reliability
+without requiring backend infrastructure.
+
+
+TABLE OF CONTENTS
+================================================================================
+
+1. Core Features and Functionality
+2. Technical Architecture
+3. Technology Stack
+4. Implementation Details
+5. Data Storage and Security
+6. UI/UX Design System
+7. Development and Deployment
+8. Performance Characteristics
+9. Known Limitations and Future Enhancements
+
+
+1. CORE FEATURES AND FUNCTIONALITY
+================================================================================
+
+1.1 EMERGENCY SOS SYSTEM
+------------------------
+- One-tap manual SOS alert button
+- Automatic SOS triggered by prolonged inactivity (configurable threshold)
+- Low battery automatic alerts (configurable threshold)
+- SMS/MMS message composition with comprehensive emergency information:
+  * Alert type and timestamp
+  * Current battery level and charging status
+  * GPS coordinates with human-readable address
+  * Google Maps link for immediate location access
+  * User profile (name, phone, email, medical information)
+- Sends to all active emergency contacts
+- Uses native messaging app for reliability
+- Success/failure feedback with user guidance
+
+1.2 LOCATION TRACKING
+---------------------
+- Continuous GPS monitoring with configurable intervals (default: 60 seconds)
+- Real-time location updates displayed on dashboard
+- Reverse geocoding for human-readable addresses (on-demand)
+- Location accuracy and altitude tracking
+- Background location updates while monitoring active
+- Distance calculation between coordinates
+- Last known location persistence
+
+1.3 BATTERY MONITORING
+----------------------
+- Real-time battery level tracking (0-100%)
+- Charging state detection (CHARGING, FULL, UNPLUGGED)
+- Low power mode detection
+- Configurable battery threshold alerts (default: 10%)
+- Critical battery safeguards (5% emergency threshold)
+- Automatic location sharing when battery critically low
+- Visual battery indicators with color coding
+- Battery icons: full, half, charging, dead
+
+1.4 ACTIVITY & MOTION DETECTION
+-------------------------------
+- Accelerometer and gyroscope sensor monitoring
+- Motion magnitude calculation from x, y, z axis data
+- Configurable inactivity threshold (default: 30 minutes)
+- Automatic alert system for prolonged inactivity
+- Last activity timestamp tracking
+- Motion detection sensitivity adjustment
+- Background motion monitoring
+
+1.5 TRIP PLANNING
+-----------------
+- Google Places API integration for destination search
+- Autocomplete search with live suggestions (8 results max)
+- Text search fallback for comprehensive results
+- Manual map pin placement via interactive Mapbox map
+- Destination categorization:
+  * Hospital
+  * Police
+  * Safe Area
+  * Outdoors (parks, nature)
+  * Food (restaurants, cafes)
+  * Culture (museums, temples)
+  * Water (beaches, lakes)
+  * Custom
+- Nearby places exploration with 3km radius search
+- Place caching for offline access
+- Pagination support (5 destinations per page)
+- Type-based filtering
+- Swipe-to-delete functionality
+- Distance calculation from current location
+- Offline map download for each destination
+
+1.6 OFFLINE MAPS
+----------------
+- Mapbox-powered offline map downloads
+- Configurable download radius (1-20 km, default: 5 km)
+- Zoom level range: 10-16 for optimal detail
+- Bounding box calculation around destinations
+- Download progress tracking with visual feedback
+- Animated progress bar with pulsing effect
+- Individual or batch map downloads
+- Storage size monitoring and display
+- Map viewer with offline capability
+- Delete single or all offline packs
+- Automatic pause/resume on app state changes
+- Initialization message for first-time downloads
+
+1.7 USER PROFILE MANAGEMENT
+---------------------------
+- Full name (required, minimum 2 characters)
+- Username/handle (optional, 2-20 characters, alphanumeric + ._ -)
+- Phone number with country code selector:
+  * Sri Lanka (+94)
+  * India (+91)
+  * USA (+1)
+  * UK (+44)
+  * Australia (+61)
+  * Germany (+49)
+- Email address (optional, validated format)
+- Medical information/notes for emergency responders
+- Profile completion enforcement
+- Profile included in all SOS messages
+
+1.8 EMERGENCY CONTACTS MANAGEMENT
+---------------------------------
+- Unlimited emergency contacts
+- Primary contact designation (one primary at a time)
+- Active/inactive toggle for each contact
+- Contact name (minimum 2 characters)
+- Phone number validation (7-15 digits)
+- Country code support for international contacts
+- Real-time contact editing
+- Delete confirmation modals
+- Visual indicators for primary and active status
+
+1.9 SETTINGS CONFIGURATION
+--------------------------
+- Inactivity threshold (hours and minutes input)
+- Battery alert threshold (1-100% slider)
+- Update interval (minutes and seconds input)
+- Auto SOS enable/disable toggle
+- Monitoring enable/disable toggle
+- Notifications toggle (future enhancement)
+- MMS preference (with automatic SMS fallback)
+- Language selection (English/Sinhala)
+
+1.10 ACTIVITY LOGS
+------------------
+- Comprehensive event logging system
+- Log types with color coding:
+  * location_update (blue)
+  * battery_check (amber)
+  * motion_detected (purple)
+  * inactivity_alert (red)
+  * sos_sent (dark red)
+- Automatic log merging (one card per minute)
+- Visual cards with icons, timestamps, and data
+- Filter by date and time range (from/to)
+- Export to CSV functionality (all logs or filtered subset)
+- Individual log deletion
+- Batch log deletion (clear all or clear filtered)
+- Last 100 logs retained automatically
+- Battery and location data embedded in each log
+- Detailed log information display
+
+1.11 MONITORING DASHBOARD
+-------------------------
+- Current monitoring status (Active/Inactive/Emergency)
+- Last known location with coordinates
+- Human-readable address display
+- Battery level with visual indicators
+- Charging status badges
+- Low power mode indicator
+- Active emergency contacts count
+- Last update timestamp
+- Quick action buttons:
+  * Setup (settings and contacts)
+  * Trip Plan
+  * Pause/Start Monitoring
+  * Manual SOS
+- Profile completion alerts
+- Pull-to-refresh functionality
+
+1.12 LOCALIZATION
+-----------------
+- Bilingual support: English (default) and Sinhala (සිංහල)
+- 100+ translated strings covering all UI elements
+- Language selector in setup screen
+- Automatic fallback to English for missing translations
+- Variable substitution support (e.g., "{{count}} contacts")
+- Consistent terminology across app
+
+
+2. TECHNICAL ARCHITECTURE
+================================================================================
+
+2.1 PROJECT STRUCTURE
+---------------------
+
+D:\Projects\SoloGuard\
+├── app/                          # Expo Router screens
+│   ├── (tabs)/                   # Tab navigation group
+│   │   ├── index.tsx            # Home/Status dashboard
+│   │   ├── logs.tsx             # Activity logs screen
+│   │   ├── two.tsx              # User profile screen
+│   │   └── _layout.tsx          # Tab layout configuration
+│   ├── _layout.tsx              # Root layout with theme
+│   ├── setup.tsx                # Settings and contacts
+│   ├── trip.tsx                 # Trip planning
+│   ├── offline-maps.tsx         # Offline map management
+│   └── about.tsx                # About screen
+│
+├── src/
+│   ├── services/                # Business logic
+│   │   ├── monitoringService.ts # Orchestration
+│   │   ├── locationService.ts   # GPS tracking
+│   │   ├── batteryService.ts    # Battery monitoring
+│   │   ├── motionService.ts     # Motion detection
+│   │   ├── smsService.ts        # SMS/MMS messaging
+│   │   └── offlineMapService.ts # Mapbox offline
+│   │
+│   ├── stores/                  # State management
+│   │   ├── useAppStore.ts      # Main Zustand store
+│   │   └── useI18n.ts          # Internationalization
+│   │
+│   ├── components/              # Reusable components
+│   │   └── MapboxMap.tsx       # Map wrapper
+│   │
+│   ├── config/
+│   │   └── mapbox.ts           # Mapbox config
+│   │
+│   └── types/
+│       └── index.ts            # TypeScript types
+│
+├── components/                  # Shared UI components
+├── constants/                   # App constants
+├── assets/                      # Images, fonts
+├── .env                         # Environment variables
+├── app.config.js               # Expo configuration
+├── package.json                # Dependencies
+└── tsconfig.json               # TypeScript config
+
+2.2 NAVIGATION ARCHITECTURE
+---------------------------
+
+Expo Router File-Based Routing:
+- Root Layout: app/_layout.tsx
+  * SafeAreaProvider wrapper
+  * Theme provider (dark/light mode)
+  * Font loading
+  * Mapbox initialization
+
+- Tab Navigation: app/(tabs)/_layout.tsx
+  * 3 tabs: Home, Activity Logs, Profile
+  * Custom tab bar styling
+  * Header configuration per tab
+
+- Modal Stack Screens:
+  * /setup - Settings and emergency contacts
+  * /trip - Trip planning and destinations
+  * /offline-maps - Offline map management
+  * /about - About application
+  * /logs - Full-screen activity logs
+
+Navigation Features:
+- Type-safe routing with TypeScript
+- Deep linking support
+- Back button handling
+- Modal presentation style
+- Custom headers per screen
+
+2.3 STATE MANAGEMENT
+--------------------
+
+Zustand Store Architecture:
+
+Persisted State (saved to AsyncStorage):
+- emergencyContacts: EmergencyContact[]
+- settings: AppSettings
+- monitoringLogs: MonitoringLog[] (last 100)
+- userProfile: UserProfile
+- tripDestinations: TripDestination[]
+- tripNearbyCache: Record<string, NearbyPlace[]>
+
+Runtime State (not persisted):
+- isMonitoring: boolean
+- lastLocation: LocationData
+- batteryStatus: BatteryStatus
+- isEmergencyMode: boolean
+- lastMotionTime: number
+
+Key Actions:
+- setMonitoring(enabled: boolean)
+- updateLocation(location: LocationData)
+- updateBatteryStatus(status: BatteryStatus)
+- addEmergencyContact(contact: EmergencyContact)
+- updateSettings(settings: Partial<AppSettings>)
+- addMonitoringLog(log: MonitoringLog)
+- setEmergencyMode(enabled: boolean)
+- updateUserProfile(profile: UserProfile)
+- addTripDestination(destination: TripDestination)
+- removeTripDestination(id: string)
+
+Storage Backend:
+- AsyncStorage (React Native's key-value store)
+- JSON serialization via Zustand persist middleware
+- Storage key: 'safeguard-storage'
+- Automatic save on state changes
+- Selective persistence (runtime state excluded)
+
+2.4 SERVICE LAYER ARCHITECTURE
+------------------------------
+
+Monitoring Service (monitoringService.ts):
+- Orchestrates all monitoring activities
+- Coordinates location, battery, and motion services
+- Handles periodic checks (every updateInterval)
+- Triggers SOS alerts based on conditions
+- Manages service lifecycle (start/stop)
+- Logs all monitoring events
+
+Location Service (locationService.ts):
+- GPS permission management
+- Continuous location watching
+- Reverse geocoding (on-demand)
+- Location accuracy tracking
+- Background location updates
+- Error handling and fallbacks
+
+Battery Service (batteryService.ts):
+- Battery level polling
+- Charging state detection
+- Low power mode detection
+- Battery status normalization (0-100%)
+- Periodic battery checks
+
+Motion Service (motionService.ts):
+- Accelerometer subscription
+- Gyroscope subscription (optional)
+- Motion magnitude calculation
+- Inactivity detection
+- Last motion timestamp tracking
+- Sensor error handling
+
+SMS Service (smsService.ts):
+- SMS availability check
+- Message composition with template
+- Emergency contact filtering (active only)
+- MMS preference with SMS fallback
+- Native messaging app integration
+- Send status tracking
+
+Offline Map Service (offlineMapService.ts):
+- Bounding box calculation
+- Mapbox offline pack creation
+- Download progress monitoring
+- Storage size calculation
+- Pack deletion management
+- Error handling with retries
+
+
+3. TECHNOLOGY STACK
+================================================================================
+
+3.1 CORE FRAMEWORK
+------------------
+- React Native: 0.73.6
+- Expo SDK: 50
+- Expo Router: 3.4.10 (file-based routing)
+- TypeScript: 5.1.3
+- Node.js: 18.x or higher
+
+3.2 STATE MANAGEMENT
+--------------------
+- Zustand: 5.0.8 (lightweight state management)
+- AsyncStorage: 1.21.0 (persistence)
+
+3.3 MAPPING & LOCATION
+----------------------
+- @rnmapbox/maps: 10.1.36 (Mapbox native SDK)
+- expo-location: 16.5.5 (GPS tracking)
+- Google Places API (search and autocomplete)
+
+3.4 SENSORS & DEVICE APIs
+-------------------------
+- expo-battery: 7.7.2 (battery monitoring)
+- expo-sensors: 12.9.1 (accelerometer, gyroscope)
+- expo-sms: 11.7.1 (SMS/MMS messaging)
+- @react-native-community/netinfo: 11.1.0 (network status)
+
+3.5 UI & STYLING
+----------------
+- NativeWind: 2.0.11 (TailwindCSS for React Native)
+- TailwindCSS: 3.3.0
+- React Native Safe Area Context: 4.8.2
+- Expo Vector Icons (Ionicons, FontAwesome)
+
+3.6 FILE SYSTEM & SHARING
+-------------------------
+- expo-file-system: 16.0.9 (file operations)
+- expo-sharing: 11.10.0 (share files)
+
+3.7 DATE & TIME
+---------------
+- @react-native-community/datetimepicker: 7.7.0
+
+3.8 DEVELOPMENT TOOLS
+---------------------
+- Metro bundler (Expo's built-in)
+- TypeScript compiler
+- ESLint (code quality)
+- Prettier (code formatting)
+
+3.9 BUILD TOOLS
+---------------
+- EAS Build (Expo Application Services)
+- Android Studio (local Android builds)
+- Xcode (iOS builds, macOS only)
+
+
+4. IMPLEMENTATION DETAILS
+================================================================================
+
+4.1 SOS FUNCTIONALITY IMPLEMENTATION
+------------------------------------
+
+Message Template:
+```
+SAFEGUARD EMERGENCY ALERT
+
+Alert Type: [Manual SOS / Automatic Inactivity Alert / Low Battery Alert]
+Time: [Timestamp in local format]
+Battery: [Level]% [Charging Status]
+
+Location: [Human-readable address if available]
+Coordinates: [Latitude], [Longitude]
+
+Google Maps: https://maps.google.com/?q=[lat],[lon]
+
+User Details:
+Name: [Full Name]
+Username: [@username]
+Phone: [+country_code number]
+Email: [email@example.com]
+Medical Notes: [Medical information for emergency responders]
+
+Please check on me immediately!
+```
+
+SOS Trigger Paths:
+1. Manual: User presses SOS button → confirmation modal → send
+2. Automatic: Inactivity > threshold → auto send
+3. Battery Low: Battery ≤ threshold → auto send
+
+Implementation Logic:
+```typescript
+async function sendSOSAlert(type: 'manual' | 'automatic') {
+  // 1. Gather current data
+  const location = store.lastLocation;
+  const battery = store.batteryStatus;
+  const profile = store.userProfile;
+
+  // 2. Get address via reverse geocoding (if location available)
+  const address = location ? await reverseGeocode(location) : null;
+
+  // 3. Compose message from template
+  const message = composeSOSMessage(type, location, address, battery, profile);
+
+  // 4. Get active emergency contacts
+  const contacts = store.emergencyContacts.filter(c => c.isActive);
+
+  // 5. Send via SMS service
+  const result = await smsService.sendEmergencyAlert(contacts, message);
+
+  // 6. Log event
+  store.addMonitoringLog({
+    type: 'sos_sent',
+    timestamp: Date.now(),
+    data: { type, success: result.success, contactCount: contacts.length }
+  });
+
+  // 7. Set emergency mode (auto-clear after 5 minutes)
+  store.setEmergencyMode(true);
+  setTimeout(() => store.setEmergencyMode(false), 300000);
+
+  return result;
+}
+```
+
+4.2 LOCATION TRACKING IMPLEMENTATION
+------------------------------------
+
+Permission Request:
+```typescript
+async function requestPermissions(): Promise<boolean> {
+  const { status } = await Location.requestForegroundPermissionsAsync();
+  return status === 'granted';
+}
+```
+
+Continuous Tracking:
+```typescript
+let locationSubscription: Location.LocationSubscription | null = null;
+
+async function startLocationTracking(interval: number) {
+  locationSubscription = await Location.watchPositionAsync(
+    {
+      accuracy: Location.Accuracy.BestForNavigation,
+      timeInterval: interval, // milliseconds
+      distanceInterval: 1,    // meters
+    },
+    (location) => {
+      const locationData: LocationData = {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        altitude: location.coords.altitude,
+        accuracy: location.coords.accuracy,
+        timestamp: location.timestamp,
+      };
+
+      store.updateLocation(locationData);
+
+      store.addMonitoringLog({
+        type: 'location_update',
+        timestamp: Date.now(),
+        location: locationData,
+      });
+    }
+  );
+}
+
+function stopLocationTracking() {
+  if (locationSubscription) {
+    locationSubscription.remove();
+    locationSubscription = null;
+  }
+}
+```
+
+Reverse Geocoding (on-demand):
+```typescript
+async function reverseGeocode(location: LocationData): Promise<string | null> {
+  try {
+    const results = await Location.reverseGeocodeAsync({
+      latitude: location.latitude,
+      longitude: location.longitude,
+    });
+
+    if (results.length > 0) {
+      const addr = results[0];
+      return `${addr.street}, ${addr.city}, ${addr.region}, ${addr.country}`;
+    }
+  } catch (error) {
+    console.error('Reverse geocoding failed:', error);
+  }
+  return null;
+}
+```
+
+4.3 TRIP PLANNING IMPLEMENTATION
+--------------------------------
+
+Google Places Autocomplete:
+```typescript
+async function searchPlaces(query: string): Promise<Place[]> {
+  const url = 'https://maps.googleapis.com/maps/api/place/autocomplete/json';
+  const params = {
+    input: query,
+    key: GOOGLE_PLACES_KEY,
+    sessiontoken: generateSessionToken(),
+  };
+
+  const response = await fetch(`${url}?${new URLSearchParams(params)}`);
+  const data = await response.json();
+
+  if (data.predictions && data.predictions.length > 0) {
+    return data.predictions.map(p => ({
+      placeId: p.place_id,
+      name: p.description,
+    }));
+  }
+
+  // Fallback to text search if autocomplete returns nothing
+  return textSearch(query);
+}
+```
+
+Nearby Places Search:
+```typescript
+async function searchNearby(
+  location: LocationData,
+  type: string,
+  radius: number = 3000
+): Promise<NearbyPlace[]> {
+  const typeMap = {
+    food: 'restaurant',
+    outdoors: 'park',
+    culture: 'museum',
+    water: 'tourist_attraction',
+    hospital: 'hospital',
+    police: 'police',
+  };
+
+  const url = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json';
+  const params = {
+    location: `${location.latitude},${location.longitude}`,
+    radius: radius.toString(),
+    type: typeMap[type] || type,
+    key: GOOGLE_PLACES_KEY,
+  };
+
+  const response = await fetch(`${url}?${new URLSearchParams(params)}`);
+  const data = await response.json();
+
+  return data.results.map(r => ({
+    id: r.place_id,
+    name: r.name,
+    vicinity: r.vicinity,
+    location: {
+      latitude: r.geometry.location.lat,
+      longitude: r.geometry.location.lng,
+    },
+    types: r.types,
+  }));
+}
+```
+
+4.4 OFFLINE MAPS IMPLEMENTATION
+-------------------------------
+
+Bounding Box Calculation:
+```typescript
+function calculateBounds(
+  latitude: number,
+  longitude: number,
+  radiusInKm: number
+): [[number, number], [number, number]] {
+  const latDelta = (radiusInKm / 6371) * (180 / Math.PI);
+  const lonDelta = latDelta / Math.cos((latitude * Math.PI) / 180);
+
+  return [
+    [longitude - lonDelta, latitude - latDelta], // Southwest
+    [longitude + lonDelta, latitude + latDelta], // Northeast
+  ];
+}
+```
+
+Download Offline Pack:
+```typescript
+async function downloadOfflinePack(
+  name: string,
+  bounds: [[number, number], [number, number]],
+  onProgress: (progress: number) => void
+): Promise<void> {
+  const Mapbox = getMapbox();
+
+  const pack = await Mapbox.offlineManager.createPack(
+    {
+      name: name,
+      styleURL: MAPBOX_STYLE_URL,
+      bounds: bounds,
+      minZoom: 10,
+      maxZoom: 16,
+      metadata: JSON.stringify({
+        name,
+        bounds,
+        createdAt: Date.now(),
+      }),
+    },
+    (packRegion, status) => {
+      const progress = status.percentage / 100;
+      onProgress(progress);
+
+      if (status.state === 'complete') {
+        console.log('Download complete');
+      }
+    },
+    (packRegion, error) => {
+      console.error('Download error:', error);
+    }
+  );
+
+  return pack;
+}
+```
+
+4.5 BATTERY MONITORING IMPLEMENTATION
+-------------------------------------
+
+Battery Polling:
+```typescript
+let batteryInterval: NodeJS.Timeout | null = null;
+
+async function startBatteryMonitoring(
+  interval: number,
+  callback: (status: BatteryStatus) => void
+) {
+  batteryInterval = setInterval(async () => {
+    try {
+      const [level, state, lowPower] = await Promise.all([
+        Battery.getBatteryLevelAsync(),
+        Battery.getBatteryStateAsync(),
+        Battery.isLowPowerModeEnabledAsync(),
+      ]);
+
+      const batteryLevel = Math.round(Math.max(0, Math.min(1, level)) * 100);
+      const isCharging = state === Battery.BatteryState.CHARGING;
+
+      const status: BatteryStatus = {
+        batteryLevel,
+        isCharging,
+        isLowPowerMode: lowPower,
+        timestamp: Date.now(),
+      };
+
+      callback(status);
+    } catch (error) {
+      console.error('Battery monitoring error:', error);
+    }
+  }, interval);
+}
+
+function stopBatteryMonitoring() {
+  if (batteryInterval) {
+    clearInterval(batteryInterval);
+    batteryInterval = null;
+  }
+}
+```
+
+Battery Icon Logic:
+```typescript
+function getBatteryIcon(percent: number | null, isCharging: boolean): string {
+  if (isCharging) return 'battery-charging';
+  if (percent == null) return 'battery-dead';
+  if (percent >= 95) return 'battery-full';
+  if (percent > 40) return 'battery-half';
+  if (percent > 15) return 'battery-half';
+  return 'battery-dead';
+}
+```
+
+4.6 ACTIVITY LOGS IMPLEMENTATION
+--------------------------------
+
+Log Merging Algorithm:
+```typescript
+function mergeLogsPerMinute(
+  logs: LogRecord[],
+  bucketMs: number = 60000
+): LogRecord[] {
+  const buckets = new Map<number, LogRecord>();
+
+  for (const log of logs) {
+    // Calculate bucket key (minute)
+    const key = Math.floor(log.timestamp / bucketMs);
+    const existing = buckets.get(key);
+
+    if (!existing) {
+      buckets.set(key, { ...log });
+      continue;
+    }
+
+    // Merge: combine battery + location, keep higher priority type
+    const batteryLevel = log.batteryLevel ?? existing.batteryLevel;
+    const location = log.location ?? existing.location;
+
+    const type = getHigherPriorityType(existing.type, log.type);
+    const timestamp = Math.max(existing.timestamp, log.timestamp);
+
+    buckets.set(key, {
+      ...existing,
+      ...log,
+      type,
+      batteryLevel,
+      location,
+      timestamp,
+    });
+  }
+
+  return Array.from(buckets.values());
+}
+```
+
+Type Priority:
+```typescript
+const TYPE_PRIORITY = [
+  'sos_sent',           // Highest priority
+  'inactivity_alert',
+  'motion_detected',
+  'location_update',
+  'battery_check',      // Lowest priority
+];
+```
+
+CSV Export:
+```typescript
+function exportToCSV(logs: LogRecord[]): string {
+  const header = [
+    'id', 'type', 'timestamp', 'date', 'time',
+    'batteryLevel', 'latitude', 'longitude', 'address', 'data'
+  ];
+
+  const rows = logs.map(log => {
+    const date = new Date(log.timestamp);
+    return [
+      escape(log.id),
+      escape(log.type),
+      escape(log.timestamp),
+      escape(date.toLocaleDateString()),
+      escape(date.toLocaleTimeString()),
+      escape(log.batteryLevel ?? ''),
+      escape(log.location?.latitude ?? ''),
+      escape(log.location?.longitude ?? ''),
+      escape(log.location?.address ?? ''),
+      escape(typeof log.data === 'string' ? log.data : JSON.stringify(log.data)),
+    ].join(',');
+  });
+
+  return [header.join(','), ...rows].join('\n');
+}
+
+function escape(value: any): string {
+  return `"${String(value).replace(/"/g, '""')}"`;
+}
+```
+
+
+5. DATA STORAGE AND SECURITY
+================================================================================
+
+5.1 LOCAL STORAGE
+-----------------
+
+Storage Mechanism:
+- AsyncStorage (React Native's persistent key-value store)
+- JSON serialization for complex objects
+- Storage key: 'safeguard-storage'
+- Automatic persistence via Zustand middleware
+
+Storage Limits:
+- Android: ~6-10 MB (varies by device)
+- iOS: Unlimited (limited by device storage)
+
+Data Retention:
+- Emergency Contacts: Unlimited (user-managed)
+- Settings: Persisted indefinitely
+- User Profile: Persisted indefinitely
+- Monitoring Logs: Last 100 entries (auto-pruned)
+- Trip Destinations: Unlimited (user-managed)
+- Trip Nearby Cache: Unlimited (cleared when destination removed)
+
+Offline Maps Storage:
+- Managed by Mapbox SDK separately
+- Stored in app's document directory
+- Not counted against AsyncStorage limit
+- Size varies: 5-50 MB per region
+
+5.2 DATA STRUCTURES
+-------------------
+
+Emergency Contact:
+```typescript
+interface EmergencyContact {
+  id: string;              // UUID
+  name: string;            // Min 2 characters
+  phoneNumber: string;     // E.164 format: +[country][number]
+  isPrimary: boolean;      // Only one can be primary
+  isActive: boolean;       // Enable/disable toggle
+}
+```
+
+Settings:
+```typescript
+interface AppSettings {
+  inactivityThreshold: number;    // Minutes
+  batteryThreshold: number;       // Percentage (1-100)
+  monitoringEnabled: boolean;
+  autoSOSEnabled: boolean;
+  notificationsEnabled: boolean;
+  updateInterval: number;         // Seconds
+  preferMMS: boolean;
+  language: 'en' | 'si';
+}
+```
+
+Monitoring Log:
+```typescript
+interface MonitoringLog {
+  id: string;
+  timestamp: number;
+  type: 'location_update' | 'battery_check' | 'motion_detected'
+        | 'inactivity_alert' | 'sos_sent';
+  data?: any;
+  batteryLevel?: number;
+  location?: LocationData;
+}
+```
+
+User Profile:
+```typescript
+interface UserProfile {
+  fullName: string;        // Required, min 2 characters
+  username?: string;       // Optional, 2-20 characters
+  phoneNumber?: string;    // E.164 format
+  email?: string;          // Validated email format
+  medicalInfo?: string;    // Free text
+}
+```
+
+Trip Destination:
+```typescript
+interface TripDestination {
+  id: string;
+  name: string;
+  location: LocationData;
+  type: 'hospital' | 'police' | 'safe_area' | 'outdoors'
+        | 'food' | 'culture' | 'water' | 'custom';
+  isPreloaded: boolean;
+}
+```
+
+5.3 SECURITY FEATURES
+---------------------
+
+Local Data Protection:
+- App sandbox isolation (iOS and Android)
+- No cross-app data access
+- AsyncStorage unencrypted (relies on OS security)
+- Potential enhancement: Biometric encryption
+
+API Key Security:
+- Environment variables (.env file)
+- .gitignore prevents version control commit
+- Keys: EXPO_PUBLIC_GOOGLE_PLACES_KEY, EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN
+- Can be regenerated if compromised
+
+SMS Security:
+- Native messaging app (system-level security)
+- No message storage in app
+- User controls send action (manual confirmation)
+- No automatic backend relay
+
+Privacy Features:
+- No analytics or telemetry (Mapbox telemetry disabled)
+- No user accounts or cloud sync
+- No backend servers
+- All data local to device
+- No location history sent externally
+
+Permissions:
+- Location: Foreground only (requested on monitoring start)
+- SMS: Compose-only (uses native app)
+- Sensors: Accelerometer, Gyroscope
+- Storage: File system for offline maps
+- Network: Internet connectivity checks
+
+5.4 DATA EXPORT
+---------------
+
+CSV Export Format:
+- RFC 4180 compliant
+- UTF-8 encoding
+- Quote escaping for special characters
+- Columns: id, type, timestamp, date, time, batteryLevel,
+  latitude, longitude, address, data
+
+Export Options:
+1. Export All Logs: All monitoring logs in database
+2. Export Filtered Logs: Only logs matching date/time filters
+
+Sharing:
+- Expo Sharing API (native share sheet)
+- Supports: Email, messaging, cloud storage
+- Fallback: Save to cache directory with path notification
+
+
+6. UI/UX DESIGN SYSTEM
+================================================================================
+
+6.1 COLOR SCHEME
+----------------
+
+Primary Colors:
+- Blue: #3b82f6 (navigation, actions)
+- Red: #ef4444 (SOS, emergency, danger)
+- Green: #22c55e (success, confirmations)
+- Amber: #f59e0b (battery warnings)
+- Purple: #8b5cf6 (motion detection)
+
+Neutral Colors (Light Mode):
+- Background: #f9fafb (gray-50)
+- Card: #ffffff (white)
+- Border: #e5e7eb (gray-200)
+- Text Primary: #111827 (gray-900)
+- Text Secondary: #6b7280 (gray-500)
+
+Neutral Colors (Dark Mode):
+- Background: #111827 (gray-900)
+- Card: #1f2937 (gray-800)
+- Border: #374151 (gray-700)
+- Text Primary: #f9fafb (gray-50)
+- Text Secondary: #9ca3af (gray-400)
+
+Status Colors:
+- Active/Running: #22c55e (green)
+- Inactive: #6b7280 (gray)
+- Emergency: #dc2626 (dark red)
+
+Log Type Colors:
+- Location Update: #3b82f6 (blue)
+- Battery Check: #f59e0b (amber)
+- Motion Detected: #8b5cf6 (purple)
+- Inactivity Alert: #ef4444 (red)
+- SOS Sent: #dc2626 (dark red)
+
+6.2 TYPOGRAPHY
+--------------
+
+Font Family:
+- System: Default platform font (San Francisco on iOS, Roboto on Android)
+- Monospace: SpaceMono (for coordinates, technical data)
+
+Font Sizes:
+- xs: 12px (labels, meta info)
+- sm: 14px (body text, buttons)
+- base: 16px (default body)
+- lg: 18px (headings)
+- xl: 20px (page titles)
+- 2xl: 24px (large titles)
+
+Font Weights:
+- Regular: 400 (default body text)
+- Medium: 500 (emphasized text)
+- Semibold: 600 (headings)
+- Bold: 700 (important headings)
+
+6.3 SPACING SYSTEM
+------------------
+
+Based on 4px base unit (Tailwind scale):
+- 0.5 = 2px
+- 1 = 4px
+- 2 = 8px
+- 3 = 12px
+- 4 = 16px (most common padding)
+- 5 = 20px
+- 6 = 24px
+- 8 = 32px
+- 12 = 48px
+- 16 = 64px
+
+Common Patterns:
+- Card padding: p-4 (16px)
+- Section padding: p-6 (24px)
+- Button padding: py-2 px-4 (8px vertical, 16px horizontal)
+- Gap between items: gap-3 or gap-4 (12px or 16px)
+
+6.4 COMPONENT PATTERNS
+----------------------
+
+Cards:
+- Background: white/gray-800
+- Rounded: rounded-lg (8px) or rounded-2xl (16px)
+- Shadow: shadow-sm or shadow-lg
+- Border: 1px gray-200/gray-700
+- Padding: p-4 (16px)
+
+Buttons:
+- Primary: bg-blue-600, active:bg-blue-700, text-white
+- Destructive: bg-red-600, active:bg-red-700, text-white
+- Secondary: bg-gray-100, border, text-gray-900
+- Disabled: bg-gray-300, opacity-50
+- Rounded: rounded-lg (8px)
+- Padding: py-2 px-4 or py-3 px-6
+
+Input Fields:
+- Background: gray-100/gray-700
+- Border: 1px gray-300/gray-600
+- Rounded: rounded-lg (8px)
+- Padding: px-3 py-2 or px-4 py-3
+- Focus: border-blue-500
+
+Modals:
+- Overlay: bg-black/40 (40% opacity)
+- Content: white/gray-900, rounded-2xl, shadow-2xl
+- Padding: p-5 or p-6
+- Max width: ~90% of screen
+- Centered or bottom-aligned
+
+Badges:
+- Small: px-2 py-1, text-xs
+- Rounded: rounded-full or rounded-lg
+- Color-coded by status
+
+6.5 DARK MODE SUPPORT
+---------------------
+
+Implementation:
+- Automatic theme detection via useColorScheme()
+- React Navigation theme provider
+- TailwindCSS dark: variants
+- Consistent color mapping
+
+Color Contrast:
+- WCAG AA compliant (4.5:1 minimum)
+- All text readable on backgrounds
+- Icons have sufficient contrast
+
+Toggle:
+- Follows system setting (iOS/Android)
+- No manual override (uses OS preference)
+
+6.6 ACCESSIBILITY
+-----------------
+
+Touch Targets:
+- Minimum 44x44 pt (iOS HIG guideline)
+- Adequate spacing between interactive elements
+- Large SOS button (easy to tap in emergency)
+
+Visual Feedback:
+- Active/pressed states on all buttons
+- Loading indicators for async operations
+- Success/error feedback
+- Status badges with clear labels
+
+Color Independence:
+- Color + icon combinations
+- Never color-only information
+- Text labels on all status indicators
+
+Screen Reader:
+- Semantic component structure
+- Descriptive labels on inputs
+- Modal accessibility
+- Icon-only buttons have hidden text
+
+
+7. DEVELOPMENT AND DEPLOYMENT
+================================================================================
+
+7.1 DEVELOPMENT SETUP
+---------------------
+
+Prerequisites:
+- Node.js 18.x or higher
+- npm or yarn package manager
+- Expo CLI (optional, included in project)
+
+Environment Variables (.env):
+```
+EXPO_PUBLIC_GOOGLE_PLACES_KEY=your_google_api_key
+EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN=your_mapbox_token
+```
+
+Install Dependencies:
+```bash
+npm install
+```
+
+Start Development Server:
+```bash
+npx expo start
+```
+
+Development Options:
+1. Expo Go App (limited, no Mapbox)
+   - Scan QR code with Expo Go app
+   - Good for UI/state development
+
+2. Development Build (recommended)
+   - Full native module support
+   - Required for Mapbox features
+
+7.2 BUILD PROCESS
+-----------------
+
+Option 1: EAS Build (Cloud)
+```bash
+# Install EAS CLI
+npm install -g eas-cli
+
+# Login to Expo account
+eas login
+
+# Configure EAS
+eas build:configure
+
+# Build for Android (development)
+eas build --profile development --platform android
+
+# Build for production
+eas build --profile production --platform android
+eas build --profile production --platform ios
+```
+
+Option 2: Local Build (Android)
+```bash
+# Generate native projects
+npx expo prebuild --platform android
+
+# Build with Gradle
+cd android
+./gradlew assembleDebug  # Development
+./gradlew assembleRelease  # Production
+```
+
+Option 3: Local Build (iOS)
+```bash
+# Generate native projects
+npx expo prebuild --platform ios
+
+# Open in Xcode
+open ios/SoloGuard.xcworkspace
+
+# Build via Xcode (requires macOS and Apple Developer account)
+```
+
+7.3 TESTING
+-----------
+
+Manual Testing Checklist:
+1. SOS functionality
+   - Manual SOS with contacts
+   - Automatic inactivity alert
+   - Battery low alert
+   - SMS delivery confirmation
+
+2. Location tracking
+   - GPS accuracy
+   - Address resolution
+   - Background updates
+   - Permission handling
+
+3. Battery monitoring
+   - Level accuracy
+   - Charging detection
+   - Low battery triggers
+   - Icon display
+
+4. Motion detection
+   - Accelerometer data
+   - Inactivity detection
+   - Threshold accuracy
+
+5. Trip planning
+   - Place search
+   - Destination adding
+   - Offline maps download
+   - Map viewing
+
+6. Activity logs
+   - Log creation
+   - Filtering
+   - CSV export
+   - Deletion
+
+7. UI/UX
+   - Dark mode
+   - Responsive layout
+   - Touch targets
+   - Loading states
+
+Automated Testing (Not Implemented):
+- Unit tests: Jest
+- Integration tests: React Native Testing Library
+- E2E tests: Detox or Appium
+
+7.4 DEPLOYMENT
+--------------
+
+Android Deployment:
+1. Build APK/AAB with EAS or local Gradle
+2. Test on physical devices
+3. Upload to Google Play Console
+4. Fill in store listing
+5. Submit for review
+
+iOS Deployment:
+1. Build IPA with EAS or Xcode
+2. Test on physical devices
+3. Upload to App Store Connect
+4. Fill in app metadata
+5. Submit for review
+
+Update Strategy:
+- OTA Updates: Expo Updates (for JS changes only)
+- Full Updates: Store submission (for native changes)
+- Version numbering: Semantic versioning (1.0.0)
+
+
+8. PERFORMANCE CHARACTERISTICS
+================================================================================
+
+8.1 APP PERFORMANCE
+-------------------
+
+Bundle Size:
+- Base app: ~3-5 MB
+- With Mapbox: ~10-15 MB
+- Offline maps: 5-50 MB per region (variable)
+
+Memory Usage:
+- Idle: ~50-100 MB
+- Monitoring: ~100-150 MB
+- Map rendering: +50-100 MB
+
+Battery Impact:
+- Low: GPS every 60s, minimal drain
+- Medium: Continuous sensors, moderate drain
+- High: Frequent map rendering
+
+Network Usage:
+- Minimal: SMS alerts (few KB)
+- Moderate: Google Places API queries
+- High: Offline map downloads (5-50 MB)
+
+8.2 OPTIMIZATION STRATEGIES
+---------------------------
+
+Location Tracking:
+- Configurable update interval (default 60s)
+- Distance threshold: 1 meter minimum
+- Reverse geocoding on-demand only
+- Background updates optimized
+
+Battery Monitoring:
+- Polling instead of continuous subscription
+- Batch reads for all battery data
+- Efficient interval timing
+
+Motion Detection:
+- Sensor subscription only when monitoring active
+- Magnitude calculation optimized
+- Efficient inactivity checking
+
+Logs:
+- Maximum 100 entries (auto-pruning)
+- Log merging reduces UI load
+- Efficient filtering algorithms
+
+Maps:
+- Zoom level limits (10-16)
+- Configurable download radius
+- On-demand map rendering
+
+
+9. KNOWN LIMITATIONS AND FUTURE ENHANCEMENTS
+================================================================================
+
+9.1 CURRENT LIMITATIONS
+-----------------------
+
+Background Processing:
+- No true background service (app must be open)
+- Location updates may stop if app killed
+- Battery monitoring limited when app suspended
+- Requires platform-specific code for background tasks
+
+SMS Reliability:
+- Requires native app (user must tap Send)
+- No delivery confirmation
+- MMS not truly supported (SMS fallback)
+- Varies by carrier and device
+
+Offline Maps:
+- Large file sizes (5-50 MB per region)
+- Mapbox requires custom development build
+- Limited to predefined zoom levels
+- Storage intensive for many regions
+
+Battery Optimization:
+- Aggressive battery savers may kill app
+- No exemption from battery restrictions
+- Monitoring may be throttled on some devices
+
+Platform Support:
+- Android: Full support
+- iOS: Full support (requires Apple Developer account)
+- Web: Limited (no SMS, sensors)
+
+9.2 FUTURE ENHANCEMENTS
+-----------------------
+
+Planned Features:
+
+Localization:
+- Tamil (தமிழ்) language
+- Additional languages (Hindi, Malayalam)
+- RTL layout support
+
+Offline Data:
+- Emergency numbers database
+- Safe zones and tourist police locations
+- Embassy contacts
+- Medical facility directory
+
+Backend Integration (Optional):
+- Historical data storage
+- Observer dashboard for family/friends
+- Real-time location sharing
+- Cloud backup
+
+Security:
+- Biometric app lock
+- Encrypted local storage
+- PIN/password protection
+- Remote wipe capability
+
+Advanced Features:
+- True background monitoring
+- Geofencing alerts
+- Voice-activated SOS
+- Fall detection
+- Smartwatch integration
+- Route tracking
+- Silent push notifications
+
+Technical Improvements:
+- Automated testing suite
+- Performance monitoring
+- Crash reporting
+- Analytics (privacy-preserving)
+- Code splitting for smaller bundles
+
+9.3 COMMUNITY CONTRIBUTIONS
+---------------------------
+
+The SoloGuard project welcomes contributions in:
+- Translation to additional languages
+- UI/UX improvements
+- Bug fixes and testing
+- Documentation enhancements
+- Feature suggestions
+- Code optimization
+
+
+================================================================================
+                            END OF REPORT
+================================================================================
+
+Document Version: 1.0
+Generated: December 2024
+Application Version: 1.0.0
+Platform: React Native (Expo)
+Target Regions: Sri Lanka (expandable)
+
+For questions or support, please refer to the project documentation or
+contact the development team.
+
+This report provides a comprehensive overview of the SoloGuard safety
+application's architecture, features, and implementation details for
+developers, stakeholders, and contributors.
